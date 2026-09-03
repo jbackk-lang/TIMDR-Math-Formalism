@@ -25,7 +25,7 @@ import threading
 import traceback
 from pathlib import Path
 from tkinter import (
-    Tk, Frame, Label, Button, StringVar, DoubleVar, IntVar,
+    Tk, Canvas, Frame, Label, Button, StringVar, DoubleVar, IntVar,
     ttk, W, E, END, DISABLED, NORMAL,
 )
 from tkinter.scrolledtext import ScrolledText
@@ -429,8 +429,8 @@ class Dashboard:
     def __init__(self, root: Tk):
         self.root = root
         root.title("TIMDR-Math-Formalism — dashboard")
-        root.geometry("1000x820")
-        root.minsize(900, 700)
+        root.geometry("1000x700")
+        root.minsize(700, 480)
 
         # Wspólne parametry protokołu (obie zakładki)
         self.seed_var = IntVar(value=42)
@@ -472,14 +472,54 @@ class Dashboard:
         self.custom_bias_strength_var = DoubleVar(value=0.5)
         self.preset_var = StringVar(value="")
 
+        self._build_scroll_container()
         self._build_shared_controls()
         self._build_notebook()
         self._build_output()
 
+    # -- przewijalny kontener na całą zawartość okna ----------------------
+
+    def _build_scroll_container(self):
+        """Cała zawartość okna (parametry + zakładki + raport + wykres)
+        potrafi być wyższa niż ekran (zwłaszcza z paskiem zadań) —
+        opakuj wszystko w Canvas + Scrollbar zamiast liczyć na to, że
+        stałe geometry() zawsze zmieści się na ekranie użytkownika."""
+        container = Frame(self.root)
+        container.pack(fill="both", expand=True)
+
+        canvas = Canvas(container, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(container, orient="vertical", command=canvas.yview)
+        self.scroll_frame = Frame(canvas)
+
+        self.scroll_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas_window = canvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
+
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        def _resize_inner(event):
+            canvas.itemconfig(canvas_window, width=event.width)
+        canvas.bind("<Configure>", _resize_inner)
+
+        def _on_mousewheel(event):
+            if event.num == 4:
+                canvas.yview_scroll(-1, "units")
+            elif event.num == 5:
+                canvas.yview_scroll(1, "units")
+            else:
+                canvas.yview_scroll(-1 * int(event.delta / 120), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)  # Windows / macOS
+        canvas.bind_all("<Button-4>", _on_mousewheel)    # Linux — scroll up
+        canvas.bind_all("<Button-5>", _on_mousewheel)    # Linux — scroll down
+
     # -- wspólne parametry ------------------------------------------------
 
     def _build_shared_controls(self):
-        top = Frame(self.root)
+        top = Frame(self.scroll_frame)
         top.pack(fill="x", padx=10, pady=(10, 0))
 
         Label(top, text="Seed:").grid(row=0, column=0, sticky=W)
@@ -507,7 +547,7 @@ class Dashboard:
     # -- notebook -----------------------------------------------------
 
     def _build_notebook(self):
-        self.notebook = ttk.Notebook(self.root)
+        self.notebook = ttk.Notebook(self.scroll_frame)
         self.notebook.pack(fill="x", padx=10, pady=10)
 
         builtin_tab = Frame(self.notebook)
@@ -733,7 +773,7 @@ class Dashboard:
     # -- wyjście (raport + wykres) --------------------------------------
 
     def _build_output(self):
-        bottom = Frame(self.root)
+        bottom = Frame(self.scroll_frame)
         bottom.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
         self.report_text = ScrolledText(bottom, height=14, wrap="word", font=("Consolas", 10))
