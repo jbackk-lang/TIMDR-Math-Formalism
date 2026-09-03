@@ -135,6 +135,67 @@ def test_scenario_custom_mean_shift_passes_gate_and_detects_effect():
     assert main_result.median_test > main_result.median_background
 
 
+def test_presets_reference_valid_dropdown_values():
+    """Regresja: każdy klucz w PRESETS musi mieć odpowiednik w
+    _PRESET_KEY_TO_VAR, a test_source/bg_source/metric muszą być
+    dokładnie takimi etykietami, jakie GUI wystawia w Comboboxach
+    (inaczej _load_preset ustawiłby wartość, której combobox nie zna)."""
+    for name, preset in dashboard.PRESETS.items():
+        for key in preset:
+            assert key in dashboard._PRESET_KEY_TO_VAR, f"{name}: nieznany klucz {key!r}"
+        assert preset["test_source"] in dashboard.TEST_SOURCES, name
+        assert preset["bg_source"] in dashboard.BG_SOURCES, name
+        assert preset["metric"] in dashboard.METRICS, name
+
+
+def test_presets_run_end_to_end():
+    """Każdy gotowy przykład musi dać się przepuścić przez
+    scenario_custom() bez wyjątku (kontrola może NIE przejść — to
+    dopuszczalny, uczciwy wynik — ale kod nie może się wysypać)."""
+    for name, preset in dashboard.PRESETS.items():
+        test_params = {}
+        if preset["test_source"] == "Liczby pierwsze":
+            test_params = {"n_max": preset["test_nmax"]}
+        elif preset["test_source"] == "Losowe całkowite":
+            test_params = {"low": preset["test_low"], "high": preset["test_high"]}
+        elif preset["test_source"] == "Szum AR(1)":
+            test_params = {"phi": preset["test_phi"], "sigma": preset["test_sigma"]}
+
+        bg_params = {}
+        if preset["bg_source"] == "Losowe całkowite":
+            bg_params = {"low": preset["bg_low"], "high": preset["bg_high"]}
+        elif preset["bg_source"] == "Szum AR(1)":
+            bg_params = {"phi": preset["bg_phi"], "sigma": preset["bg_sigma"]}
+
+        metric_params = {}
+        if preset["metric"] == "Frakcja: x mod m == r":
+            metric_params = {"modulus": preset["modulus"], "remainder": preset["remainder"]}
+        elif preset["metric"] == "Frakcja: x > próg":
+            metric_params = {"threshold": preset["threshold"]}
+
+        params = {
+            "seed": preset["seed"],
+            "n_windows": preset["n_windows"],
+            "window_size": preset["window_size"],
+            "name": preset["name"],
+            "description": preset["description"],
+            "effect_description": preset["effect_description"],
+            "test_source": dashboard._SOURCE_LABEL_TO_KEY[preset["test_source"]],
+            "test_params": test_params,
+            "bg_source": dashboard._SOURCE_LABEL_TO_KEY[preset["bg_source"]],
+            "bg_params": bg_params,
+            "metric": dashboard._METRIC_LABEL_TO_KEY[preset["metric"]],
+            "metric_params": metric_params,
+            "effect_shift": preset["effect_shift"],
+            "bias_strength": preset["bias_strength"],
+        }
+        result = dashboard.scenario_custom(params)
+        hypothesis, prereg, controls, main_result, test_vals, bg_vals = result
+        assert hypothesis.name == preset["name"], name
+        assert controls.passed is True, f"{name}: kontrola +/- nie przeszła z domyślnymi parametrami"
+        assert main_result is not None, name
+
+
 def test_scenario_custom_raises_when_too_few_windows():
     params = {
         "seed": 1,
