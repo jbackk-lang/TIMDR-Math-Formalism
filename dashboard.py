@@ -429,7 +429,8 @@ class Dashboard:
     def __init__(self, root: Tk):
         self.root = root
         root.title("TIMDR-Math-Formalism — dashboard")
-        root.geometry("940x780")
+        root.geometry("1000x820")
+        root.minsize(900, 700)
 
         # Wspólne parametry protokołu (obie zakładki)
         self.seed_var = IntVar(value=42)
@@ -589,8 +590,8 @@ class Dashboard:
             f,
             text="Poniżej: dwie próby danych (testowa i tło) + jedna statystyka (metryka) liczona na obu. "
                  "Wynik = test Manna-Whitneya, czy rozkłady metryki różnią się istotnie.",
-            **SUB,
-        ).grid(row=3, column=0, columnspan=8, sticky=W, pady=(8, 2))
+            **SUB, wraplength=860, justify="left",
+        ).grid(row=3, column=0, columnspan=6, sticky=W, pady=(8, 2))
 
         # -- dane testowe (Twoja hipoteza) --
         Label(f, text="Dane testowe (Twoja hipoteza):").grid(row=4, column=0, sticky=W, pady=(6, 0))
@@ -608,22 +609,25 @@ class Dashboard:
         self.ct_phi_entry = ttk.Entry(f, textvariable=self.custom_test_phi_var, width=10)
         self.ct_sigma_label = Label(f, text="odch. std σ:")
         self.ct_sigma_entry = ttk.Entry(f, textvariable=self.custom_test_sigma_var, width=10)
+        # Osobny wiersz na parametry źródła (zamiast doklejać do wiersza
+        # z comboboxem) — inaczej przy szerszych etykietach pola wychodzą
+        # poza prawą krawędź okna.
         for i, w in enumerate((self.ct_nmax_label, self.ct_nmax_entry, self.ct_low_label, self.ct_low_entry,
                                 self.ct_high_label, self.ct_high_entry, self.ct_phi_label, self.ct_phi_entry,
                                 self.ct_sigma_label, self.ct_sigma_entry)):
-            w.grid(row=4, column=2 + i, sticky=W, padx=(2, 0), pady=(6, 0))
+            w.grid(row=5, column=1 + (i % 6), sticky=W, padx=(2, 8), pady=(4, 0))
 
         Label(
             f,
             text="Dane, o których mówi Twoja hipoteza — np. prawdziwe liczby pierwsze do N, "
                  "albo losowa/skorelowana próbka jeśli testujesz coś innego.",
-            **SUB,
-        ).grid(row=5, column=0, columnspan=8, sticky=W, pady=(2, 0))
+            **SUB, wraplength=860, justify="left",
+        ).grid(row=6, column=0, columnspan=6, sticky=W, pady=(2, 0))
 
         # -- tło / hipoteza zerowa --
-        Label(f, text="Tło = hipoteza zerowa (losowe):").grid(row=6, column=0, sticky=W, pady=(10, 0))
+        Label(f, text="Tło = hipoteza zerowa (losowe):").grid(row=7, column=0, sticky=W, pady=(10, 0))
         bg_box = ttk.Combobox(f, textvariable=self.custom_bg_source_var, values=BG_SOURCES, state="readonly", width=22)
-        bg_box.grid(row=6, column=1, sticky=W, padx=5, pady=(10, 0))
+        bg_box.grid(row=7, column=1, sticky=W, padx=5, pady=(10, 0))
         bg_box.bind("<<ComboboxSelected>>", lambda e: self._update_custom_visibility())
 
         self.cb_low_label = Label(f, text="min:")
@@ -636,19 +640,19 @@ class Dashboard:
         self.cb_sigma_entry = ttk.Entry(f, textvariable=self.custom_bg_sigma_var, width=10)
         for i, w in enumerate((self.cb_low_label, self.cb_low_entry, self.cb_high_label, self.cb_high_entry,
                                 self.cb_phi_label, self.cb_phi_entry, self.cb_sigma_label, self.cb_sigma_entry)):
-            w.grid(row=6, column=2 + i, sticky=W, padx=(2, 0), pady=(10, 0))
+            w.grid(row=8, column=1 + (i % 6), sticky=W, padx=(2, 8), pady=(4, 0))
 
         Label(
             f,
             text="Próbka reprezentująca 'brak efektu' (H0) — musi dać się wylosować wielokrotnie i niezależnie, "
                  "stąd tylko źródła losowe (nie liczby pierwsze — te są ustalone raz na zawsze).",
-            **SUB,
-        ).grid(row=7, column=0, columnspan=8, sticky=W, pady=(2, 0))
+            **SUB, wraplength=860, justify="left",
+        ).grid(row=9, column=0, columnspan=6, sticky=W, pady=(2, 0))
 
         # -- metryka --
-        Label(f, text="Metryka (statystyka testowa):").grid(row=8, column=0, sticky=W, pady=(10, 0))
+        Label(f, text="Metryka (statystyka testowa):").grid(row=10, column=0, sticky=W, pady=(10, 0))
         metric_box = ttk.Combobox(f, textvariable=self.custom_metric_var, values=METRICS, state="readonly", width=22)
-        metric_box.grid(row=8, column=1, sticky=W, padx=5, pady=(10, 0))
+        metric_box.grid(row=10, column=1, sticky=W, padx=5, pady=(10, 0))
         metric_box.bind("<<ComboboxSelected>>", lambda e: self._update_custom_visibility())
 
         self.cm_modulus_label = Label(f, text="dzielnik m:")
@@ -659,23 +663,23 @@ class Dashboard:
         self.cm_threshold_entry = ttk.Entry(f, textvariable=self.custom_threshold_var, width=10)
         for i, w in enumerate((self.cm_modulus_label, self.cm_modulus_entry, self.cm_remainder_label,
                                 self.cm_remainder_entry, self.cm_threshold_label, self.cm_threshold_entry)):
-            w.grid(row=8, column=2 + i, sticky=W, padx=(2, 0), pady=(10, 0))
+            w.grid(row=11, column=1 + i, sticky=W, padx=(2, 8), pady=(4, 0))
 
         Label(
             f,
             text="Liczona osobno na próbce testowej i na tle, potem obie serie porównuje test Manna-Whitneya "
                  "(nieparametryczny odpowiednik testu t — nie zakłada rozkładu normalnego).",
-            **SUB,
-        ).grid(row=9, column=0, columnspan=8, sticky=W, pady=(2, 0))
+            **SUB, wraplength=860, justify="left",
+        ).grid(row=12, column=0, columnspan=6, sticky=W, pady=(2, 0))
 
         # -- siła efektu do kontroli bramkowej --
-        Label(f, text="Kontrola samosprawdzająca — wstrzyknięty efekt:").grid(row=10, column=0, sticky=W, pady=(10, 0))
+        Label(f, text="Kontrola samosprawdzająca — wstrzyknięty efekt:").grid(row=13, column=0, columnspan=2, sticky=W, pady=(10, 0))
         self.ce_shift_label = Label(f, text="przesunięcie średniej Δ:")
         self.ce_shift_entry = ttk.Entry(f, textvariable=self.custom_effect_shift_var, width=10)
         self.ce_bias_label = Label(f, text="udział próby z wymuszonym warunkiem (0–1):")
         self.ce_bias_entry = ttk.Entry(f, textvariable=self.custom_bias_strength_var, width=10)
         for i, w in enumerate((self.ce_shift_label, self.ce_shift_entry, self.ce_bias_label, self.ce_bias_entry)):
-            w.grid(row=10, column=1 + i, sticky=W, padx=(2, 0), pady=(10, 0))
+            w.grid(row=14, column=1 + i, sticky=W, padx=(2, 8), pady=(4, 0))
 
         Label(
             f,
@@ -683,11 +687,11 @@ class Dashboard:
                  "(kontrola pozytywna), zanim zaufamy testowi na właściwych danych powyżej. Przy metryce "
                  "'Średnia'/'Mediana' Δ powinno być rzędu odchylenia standardowego tła; przy metrykach "
                  "frakcyjnych to udział próby (0–1) sztucznie ustawiony na warunek.",
-            **SUB,
-        ).grid(row=11, column=0, columnspan=8, sticky=W, pady=(2, 0))
+            **SUB, wraplength=860, justify="left",
+        ).grid(row=15, column=0, columnspan=6, sticky=W, pady=(2, 0))
 
         self.run_button_custom = Button(f, text="Uruchom własny scenariusz", command=self._run_custom_clicked)
-        self.run_button_custom.grid(row=12, column=0, columnspan=8, sticky=W + E, pady=(14, 0))
+        self.run_button_custom.grid(row=16, column=0, columnspan=6, sticky=W + E, pady=(14, 0))
 
         self._update_custom_visibility()
 
