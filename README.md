@@ -117,6 +117,17 @@ czy akurat trafił się "dobry" losowy ciąg. `tests/test_dashboard_logic.py`
 sprawdza logikę "Własnego scenariusza" (metryki, źródła danych,
 wstrzykiwanie efektu) bez otwierania okna GUI.
 
+## 🌦️ Walidacja na realnych danych
+
+Poza syntetycznymi przykładami, protokół został raz zastosowany do
+prawdziwej hipotezy na prawdziwych danych: czy operator rezonansu
+(≥K parametrów anomalnych jednocześnie) na realnych danych pogodowych
+(stacja Krakow_Centrum, 24 dni) przekracza to, czego oczekiwałbyś z
+samego przypadku. Wynik — łącznie z jego ograniczeniami (za krótkie
+okno, brak danych o wilgotności) i uczciwym werdyktem — jest w
+[docs/REAL_DATA_VALIDATION.md](docs/REAL_DATA_VALIDATION.md);
+odtwarzalny skrypt: [examples/real_weather_resonance_validation.py](examples/real_weather_resonance_validation.py).
+
 ## ⚠️ Czego ten pipeline NIE robi
 
 Nie dowodzi twierdzeń i nie zastępuje sprawdzenia, czy dana dziedzina ma
