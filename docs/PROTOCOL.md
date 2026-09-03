@@ -121,7 +121,86 @@ danych, nie mechaniki testu.
   strukturalnie nie ma jak wykryć różnicy, niezależnie od tego, czy
   realny efekt istnieje.
 
-### 4c. Okno jako operator (formalizacja)
+#### 4c. Efekt jako operator (formalizacja)
+
+Do tej pory "efekt" był nieformalnie opisywany przez pola `TestResult`
+(`median_test`, `median_background`, `effect_size_r`), bez jednego
+nazwanego obiektu, który je zbiera. Formalnie:
+
+```
+E(x_test, x_bg) := (median(x_test) − median(x_bg),  r(x_test, x_bg))  ∈  𝓔
+𝓔 := ℝ × [−1, 1]          (przestrzeń efektów)
+e₀ := (0, 0) ∈ 𝓔          (wyróżniony element "brak efektu")
+```
+
+gdzie `x_test = {metric_fn(w) : w ∈ okna_testowe}`,
+`x_bg = {metric_fn(w) : w ∈ okna_tła}` — próbki metryki policzonej na
+każdym oknie (`P_k` z §4c), `r` to `rank_biserial_effect_size` z §4a.
+
+To NIE jest nowy rachunek — `E(x_test, x_bg)` to dokładnie para
+`(main_result.median_test − main_result.median_background,
+main_result.effect_size_r)`, którą `TestResult` już zwraca. Formalizacja
+tu polega na nazwaniu tego, co kod już liczy, jako jednego operatora
+`E`, i na oddzieleniu go od testu istotności:
+
+- `E` opisuje **co i jak bardzo się różni** (kierunek przez pierwszą
+  współrzędną, skalowana wielkość przez drugą) — nie mówi, czy różnica
+  jest wiarygodna.
+- `mann_whitney_test` (p-wartość) opisuje **czy różnicę można odróżnić
+  od przypadku** przy danym `n_test`, `n_background` — nie mówi nic o
+  jej wielkości.
+
+`TestResult` łączy oba w jeden obiekt (`p`, `E`) — a nie tylko `p` — co
+jest właśnie treścią §4a: "istotny, ale mały" ma `p<α`, `|E₂|` blisko 0;
+"istotny i duży" ma `p<α`, `|E₂|` blisko 1.
+
+#### 4d. Generatory kontroli jako rozkłady, moc kontroli
+
+`positive_injector`, `negative_generator_a`, `negative_generator_b` są
+w kodzie funkcjami Python `(window_size, seed) -> ndarray`. Formalnie
+każda z nich jest **próbnikiem** (samplerem) z pewnego rozkładu
+prawdopodobieństwa na przestrzeni okien:
+
+```
+D_pos, D_A, D_B  — miary probabilistyczne na ℝ^window_size
+positive_injector(window_size, seed) ~ D_pos
+negative_generator_a(window_size, seed) ~ D_A
+negative_generator_b(window_size, seed) ~ D_B     (D_B = D_A z konstrukcji)
+```
+
+`metric_fn` przenosi je (pushforward) na rozkłady wartości metryki:
+`F_pos = metric_fn_*(D_pos)`, `F_A = metric_fn_*(D_A)`,
+`F_B = metric_fn_*(D_B)`.
+
+- **Kontrola pozytywna** testuje `H₀: F_pos =_d F_A` (równość
+  rozkładów) i chce ją ODRZUCIĆ (`p_pos < α`) — bo `D_pos` z konstrukcji
+  ma różnić się od `D_A`.
+- **Kontrola negatywna** testuje `H₀: F_A =_d F_B` i chce ją
+  ZACHOWAĆ (`p_neg ≥ α`) — bo `D_A = D_B` z konstrukcji (ten sam
+  generator, inny seed), więc jedyna różnica, jaką test mógłby złapać,
+  byłaby fałszywym alarmem.
+
+**Moc kontroli** (odrębna od mocy testu głównego w §4b): tutaj, w
+przeciwieństwie do danych realnych, `D_pos` i `D_A` są ZNANE z
+konstrukcji — więc moc kontroli pozytywnej DA SIĘ policzyć dokładnie,
+metodą Monte Carlo, zamiast tylko szacować:
+
+```
+power_pos(n_windows) ≈ (1/R) · Σ_{i=1}^{R} 𝟙[p_pos^(i) < α]
+```
+
+gdzie `p_pos^(i)` to p-wartość z `i`-tego niezależnego powtórzenia
+`run_controls` przy ustalonym `n_windows` (różne seedy). Praktyczna
+konsekwencja: jeśli kontrola pozytywna regularnie nie przechodzi przy
+rozsądnym `n_windows` (np. 30), są dwie różne przyczyny do rozróżnienia
+— (a) wstrzyknięty efekt jest za słaby (np. `effect_shift`/
+`bias_strength` w `dashboard.py` ustawione za nisko) — wtedy zwiększenie
+`n_windows` PODNOSI moc i problem znika; albo (b) `metric_fn` jest
+strukturalnie nieczuła na tego rodzaju efekt — wtedy zwiększanie
+`n_windows` w nieskończoność tego nie naprawi, tylko coraz dokładniej
+to udowodni (moc rośnie do sufitu niższego niż 1, nie do 1).
+
+#### 4e. Okno jako operator (formalizacja)
 
 Krok 2/5 dzieli dane na okna o rozmiarze `window_size` — dotąd tylko
 parametr w kodzie, nie nazwany obiekt matematyczny.
@@ -178,6 +257,67 @@ działa". Jeśli p ≈ 0.9–0.99 → brak efektu, koniec, raportuj to wprost.
 *Odpowiednik skilla:* §9 krok 5 ("A negative result is a valid, complete
 answer — report it as such"), §13 krok 4 ("Report the actual result,
 including 'no effect', without narrative softening").
+
+## Formalna przestrzeń TIMDR-Math
+
+Sekcje 4a-4e opisują poszczególne kroki jako osobne wzory. Ten dokument
+zbiera je w jedną przestrzeń, żeby było widać, że sześć kroków to
+złożenie operatorów na wspólnych obiektach, nie sześć niezależnych
+sztuczek.
+
+**Przestrzeń hipotez `H`.** Krotka `(opis_struktury, opis_efektu, θ)`,
+gdzie pierwsze dwa to teksty (pola `Hypothesis.description`,
+`Hypothesis.effect_description`), a `θ ∈ Θ` to parametry (`dict`, np.
+`{"n_max": 100000, "seed": 42}`). Pre-rejestracja to funkcja
+`fp: H → {0,1}^256` (SHA-256 z serializacji JSON) — `fp(h₁)=fp(h₂) ⟹
+h₁=h₂` z zaniedbywalnym prawdopodobieństwem kolizji. To jest założenie
+kryptograficzne (własność SHA-256), nie twierdzenie matematyczne
+udowodnione w tym repo — warto to rozróżnienie zachować, żeby nie
+przypisać `fp` mocniejszej gwarancji, niż faktycznie ma.
+
+**Przestrzeń metryk `M`.** Zbiór funkcji `𝓜: 𝒳 → ℝ`, gdzie `𝒳` to
+przestrzeń możliwych okien danych (np. `ℝ^window_size` albo
+`ℕ^window_size` dla danych całkowitych, jak liczby pierwsze).
+`metric_fn` dostarczana przez wywołującego jest elementem `M` —
+pipeline nie narzuca, który, tylko wymaga, żeby był jeden, ustalony,
+ten sam w kontrolach i w teście głównym (to jest dokładnie treść kroku
+3, tu tylko nazwana jako "ten sam element `M` używany dwa razy").
+
+**Operator testowy jako funkcjonał.** `mann_whitney_test` jest
+funkcjonałem
+
+```
+T: M × 𝒫(𝒳) × 𝒫(𝒳) → 𝕋
+T(𝓜, X_test, X_bg) = TestResult(...)
+```
+
+gdzie `𝒫(𝒳)` to zbiory skończonych próbek okien, a `𝕋` to przestrzeń
+`TestResult` (statystyka, p, mediany, `E ∈ 𝓔` z §4c). `T` bierze
+metrykę — element `M` — i dwie próbki, zwraca jeden obiekt łączący test
+istotności i efekt.
+
+**Cały protokół jako złożenie.** Sześć kroków (§1-§6) to w tym
+zapisie:
+
+```
+Report = format_report ∘ ⟨Gate, T⟩ ∘ Generate ∘ Preregister
+```
+
+- `Preregister: H × Θ → Preregistration` (krok 1, `fp` powyżej)
+- `Generate: Preregistration → (X_test, X_bg, X_pos, X_A, X_B)` (krok 2,
+  generatory z §4d — tu jako próbki wyciągnięte z `D_pos, D_A, D_B`)
+- `⟨Gate, T⟩`: `Gate: (X_pos, X_A, X_B) → ControlResult` (krok 5,
+  `run_controls`) jest **strażnikiem** dla `T` na danych głównych — `T`
+  na `(X_test, X_bg)` liczy się TYLKO gdy `Gate(...).passed = 1`
+  (dokładnie dlatego `format_report` w kodzie zwraca wcześnie, gdy
+  bramka nie przeszła — to nie jest wygoda API, to część definicji
+  złożenia: `T` na danych głównych jest częściową funkcją, zdefiniowaną
+  tylko na obrazie `Gate⁻¹(1)`)
+- `format_report: (ControlResult, Optional[𝕋]) → Report` (krok 6)
+
+To złożenie NIE jest nowym mechanizmem — to jest dokładnie to, co robi
+`main()` w `examples/prime_resonance_demo.py`, zapisane jako jeden wzór
+zamiast sekwencji wywołań funkcji.
 
 ## Dwa zabezpieczenia spoza sześciu kroków — też wbudowane
 
