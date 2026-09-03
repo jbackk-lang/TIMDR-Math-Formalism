@@ -75,7 +75,11 @@ GUI (Tkinter) do uruchamiania protokołu bez pisania kodu, dwie zakładki:
   efektu do samosprawdzającej kontroli pozytywnej. Zero wykonywania
   dowolnego kodu — wszystkie pola są opisane po polsku bez żargonu
   TIMDR, więc nie trzeba znać reszty ekosystemu, żeby wiedzieć, co
-  wpisać.
+  wpisać. Zakładka ma też combobox "Wczytaj przykład" z 5 gotowymi,
+  zweryfikowanymi konfiguracjami (liczby pierwsze vs losowe tło,
+  kalibracja zerowa/negatywna, AR(1) vs biały szum, liczby pierwsze
+  mod 4, mediana dwóch rozłącznych zakresów) — wybierasz z listy, pola
+  się same wypełniają, możesz od razu uruchomić albo dostroić.
 
 Klikasz "Uruchom protokół" — widzisz pełny raport (pre-rejestracja,
 kontrola +/-, test Manna-Whitneya, werdykt) i wykres porównujący

@@ -329,6 +329,97 @@ _METRIC_LABEL_TO_KEY = {
     "Frakcja: x > próg": "frac_threshold",
 }
 
+# -----------------------------------------------------------------------
+# Gotowe przykłady do wczytania w zakładce "Własny scenariusz" — pokazują
+# różne kombinacje źródeł/metryk z tych samych bezpiecznych klocków.
+# Klucze odpowiadają parametrom przyjmowanym przez scenario_custom()
+# (przetłumaczone na wartości pól GUI przez _load_preset).
+# -----------------------------------------------------------------------
+
+PRESETS = {
+    "1. Liczby pierwsze: średnia vs losowe tło": {
+        "seed": 42, "n_windows": 25, "window_size": 200, "alpha": 0.05,
+        "name": "prime_mean_vs_random",
+        "description": (
+            "Średnia wartość liczb pierwszych różni się od średniej "
+            "losowych liczb całkowitych w tym samym zakresie."
+        ),
+        "effect_description": "różnica średnich (mean) między grupą testową a tłem",
+        "test_source": "Liczby pierwsze", "test_nmax": 100_000,
+        "bg_source": "Losowe całkowite", "bg_low": 0, "bg_high": 100_000,
+        "metric": "Średnia",
+        "effect_shift": 5_000.0, "bias_strength": 0.5,
+    },
+    "2. Zero efektu — kalibracja negatywna": {
+        "seed": 1, "n_windows": 25, "window_size": 200, "alpha": 0.05,
+        "name": "null_calibration",
+        "description": (
+            "Grupa testowa i tło pochodzą z DOKŁADNIE tego samego "
+            "rozkładu — protokół powinien dać werdykt \"brak efektu\"."
+        ),
+        "effect_description": (
+            "różnica średnich między dwiema próbkami z tego samego "
+            "rozkładu losowego (oczekiwany brak różnicy)"
+        ),
+        "test_source": "Losowe całkowite", "test_low": 0, "test_high": 1_000,
+        "bg_source": "Losowe całkowite", "bg_low": 0, "bg_high": 1_000,
+        "metric": "Średnia",
+        "effect_shift": 50.0, "bias_strength": 0.5,
+    },
+    "3. AR(1) vs biały szum — frakcja ekstremów": {
+        "seed": 3, "n_windows": 25, "window_size": 200, "alpha": 0.05,
+        "name": "ar1_vs_white_noise_extremes",
+        "description": (
+            "Silnie skorelowany szum AR(1) (φ=0.8) ma inną frakcję "
+            "wartości powyżej progu 1.5 niż nieskorelowany szum (φ≈0)."
+        ),
+        "effect_description": "frakcja próbek > 1.5: AR(1) φ=0.8 vs AR(1) φ=0 (biały szum)",
+        "test_source": "Szum AR(1)", "test_phi": 0.8, "test_sigma": 1.0,
+        "bg_source": "Szum AR(1)", "bg_phi": 0.0, "bg_sigma": 1.0,
+        "metric": "Frakcja: x > próg", "threshold": 1.5,
+        "effect_shift": 0.0, "bias_strength": 0.5,
+    },
+    "4. Liczby pierwsze mod 4 — reszta 1": {
+        "seed": 4, "n_windows": 25, "window_size": 200, "alpha": 0.05,
+        "name": "primes_mod4_remainder1",
+        "description": (
+            "Wśród liczb pierwszych frakcja spełniająca x mod 4 = 1 "
+            "różni się od losowego tła w tym samym zakresie."
+        ),
+        "effect_description": "frakcja liczb ≡ 1 (mod 4): liczby pierwsze vs losowe tło",
+        "test_source": "Liczby pierwsze", "test_nmax": 200_000,
+        "bg_source": "Losowe całkowite", "bg_low": 3, "bg_high": 200_000,
+        "metric": "Frakcja: x mod m == r", "modulus": 4, "remainder": 1,
+        "effect_shift": 0.0, "bias_strength": 0.5,
+    },
+    "5. Mediana: dwa rozłączne zakresy losowych liczb": {
+        "seed": 5, "n_windows": 25, "window_size": 200, "alpha": 0.05,
+        "name": "median_disjoint_ranges",
+        "description": (
+            "Mediana grupy testowej (losowe liczby całkowite 500–600) "
+            "różni się od mediany tła (losowe liczby całkowite 0–100)."
+        ),
+        "effect_description": "mediana: losowe liczby [500,600) vs losowe liczby [0,100)",
+        "test_source": "Losowe całkowite", "test_low": 500, "test_high": 600,
+        "bg_source": "Losowe całkowite", "bg_low": 0, "bg_high": 100,
+        "metric": "Mediana",
+        "effect_shift": 50.0, "bias_strength": 0.5,
+    },
+}
+
+_PRESET_KEY_TO_VAR = {
+    "seed": "seed_var", "n_windows": "n_windows_var", "window_size": "window_size_var", "alpha": "alpha_var",
+    "name": "custom_name_var", "description": "custom_description_var", "effect_description": "custom_effect_description_var",
+    "test_source": "custom_test_source_var", "test_nmax": "custom_test_nmax_var",
+    "test_low": "custom_test_low_var", "test_high": "custom_test_high_var",
+    "test_phi": "custom_test_phi_var", "test_sigma": "custom_test_sigma_var",
+    "bg_source": "custom_bg_source_var", "bg_low": "custom_bg_low_var", "bg_high": "custom_bg_high_var",
+    "bg_phi": "custom_bg_phi_var", "bg_sigma": "custom_bg_sigma_var",
+    "metric": "custom_metric_var", "modulus": "custom_modulus_var", "remainder": "custom_remainder_var",
+    "threshold": "custom_threshold_var",
+    "effect_shift": "custom_effect_shift_var", "bias_strength": "custom_bias_strength_var",
+}
+
 
 # =======================================================================
 # GUI
@@ -378,6 +469,7 @@ class Dashboard:
         self.custom_threshold_var = DoubleVar(value=50_000.0)
         self.custom_effect_shift_var = DoubleVar(value=5_000.0)
         self.custom_bias_strength_var = DoubleVar(value=0.5)
+        self.preset_var = StringVar(value="")
 
         self._build_shared_controls()
         self._build_notebook()
@@ -464,9 +556,25 @@ class Dashboard:
     # -- zakładka: własny scenariusz -----------------------------------
 
     def _build_custom_tab(self, parent: Frame):
+        SUB = {"fg": "#666666", "font": ("TkDefaultFont", 9)}
+
+        presets_frame = Frame(parent)
+        presets_frame.pack(fill="x", padx=6, pady=(6, 0))
+        Label(presets_frame, text="Wczytaj przykład:").grid(row=0, column=0, sticky=W)
+        preset_box = ttk.Combobox(
+            presets_frame, textvariable=self.preset_var, values=list(PRESETS.keys()),
+            state="readonly", width=45,
+        )
+        preset_box.grid(row=0, column=1, sticky=W, padx=5)
+        preset_box.bind("<<ComboboxSelected>>", lambda e: self._load_preset(self.preset_var.get()))
+        Label(
+            presets_frame,
+            text="wypełnia pola poniżej gotowym przykładem — możesz je potem dowolnie zmienić",
+            **SUB,
+        ).grid(row=1, column=0, columnspan=2, sticky=W, pady=(2, 0))
+
         f = Frame(parent)
         f.pack(fill="x", padx=6, pady=6)
-        SUB = {"fg": "#666666", "font": ("TkDefaultFont", 9)}
 
         Label(f, text="Nazwa hipotezy:").grid(row=0, column=0, sticky=W)
         ttk.Entry(f, textvariable=self.custom_name_var, width=30).grid(row=0, column=1, columnspan=3, sticky=W + E, padx=5)
@@ -581,6 +689,17 @@ class Dashboard:
         self.run_button_custom = Button(f, text="Uruchom własny scenariusz", command=self._run_custom_clicked)
         self.run_button_custom.grid(row=12, column=0, columnspan=8, sticky=W + E, pady=(14, 0))
 
+        self._update_custom_visibility()
+
+    def _load_preset(self, preset_name: str):
+        preset = PRESETS.get(preset_name)
+        if preset is None:
+            return
+        for key, value in preset.items():
+            var_name = _PRESET_KEY_TO_VAR.get(key)
+            if var_name is None:
+                continue
+            getattr(self, var_name).set(value)
         self._update_custom_visibility()
 
     def _update_custom_visibility(self):
