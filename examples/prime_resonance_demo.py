@@ -46,12 +46,36 @@ def digit_sum_even_fraction(values: np.ndarray) -> float:
     return float(np.mean(digit_sums % 2 == 0))
 
 
-def _inject_even_bias(window_size: int, seed) -> np.ndarray:
-    """Kontrola pozytywna: sekwencja SKONSTRUOWANA tak, żeby metryka
-    miała wykryć efekt (same liczby parzyste -> suma cyfr często
-    parzysta, wyraźnie różna frakcja od losowego tła)."""
+def _inject_even_digit_sum(window_size: int, seed) -> np.ndarray:
+    """Kontrola pozytywna: liczby SKONSTRUOWANE tak, żeby mieć NAPRAWDĘ
+    parzystą sumę cyfr — nie tylko parzystą wartość.
+
+    POPRAWKA (znaleziona samowalidacją tego repo — niezależna
+    reimplementacja tego samego protokołu w JS, uruchomiona w
+    przeglądarce, żeby faktycznie WYKONAĆ kontrolę, a nie tylko ją
+    przeczytać). Pierwsza wersja wymuszała tylko parzystość SAMEJ
+    LICZBY (`rng.integers(1, 500, size=window_size) * 2`), po cichu
+    zakładając, że to przełoży się na parzystą sumę cyfr. To błędne
+    założenie: parzystość liczby zależy wyłącznie od ostatniej cyfry, a
+    suma cyfr od WSZYSTKICH cyfr — związek między nimi jest słaby.
+    Realny test na tym wstrzykiwaczu: kontrola pozytywna dawała
+    p≈0.22 (metryka NIE wykrywała efektu, który miała wykryć), więc
+    bramka `run_controls` poprawnie by to odrzuciła jako niewiarygodną
+    kalibrację. Naprawiono przez jawne skonstruowanie liczby z trzech
+    cyfr (a, b, c), gdzie c jest dobierane tak, żeby a+b+c było
+    parzyste — to GWARANTUJE efekt zamiast na niego liczyć."""
     rng = np.random.default_rng(seed)
-    return rng.integers(1, 500, size=window_size) * 2
+    a = rng.integers(0, 10, size=window_size)
+    b = rng.integers(0, 10, size=window_size)
+    ab_even = (a + b) % 2 == 0
+    even_digits = np.array([0, 2, 4, 6, 8])
+    odd_digits = np.array([1, 3, 5, 7, 9])
+    c = np.where(
+        ab_even,
+        even_digits[rng.integers(0, 5, size=window_size)],
+        odd_digits[rng.integers(0, 5, size=window_size)],
+    )
+    return 100 * a + 10 * b + c
 
 
 def _random_control(window_size: int, seed) -> np.ndarray:
@@ -80,7 +104,7 @@ def main() -> None:
     # --- Krok 5: kontrola pozytywna/negatywna, PRZED danymi głównymi ---
     controls = run_controls(
         metric_fn=digit_sum_even_fraction,
-        positive_injector=_inject_even_bias,
+        positive_injector=_inject_even_digit_sum,
         negative_generator_a=_random_control,
         negative_generator_b=_random_control,
         n_windows=25,
