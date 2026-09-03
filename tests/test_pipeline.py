@@ -26,6 +26,8 @@ from timdr_formalism.pipeline import (
     sieve_of_eratosthenes,
     random_background,
     ar1_noise,
+    rank_biserial_effect_size,
+    effect_size_label,
 )
 
 
@@ -158,6 +160,74 @@ def test_test_result_verdict_text_matches_significance():
     verdict = not_significant.verdict()
     assert "Brak istotnego efektu" in verdict
     assert "numerologię" in verdict or "numerologia" in verdict.lower() or True
+
+
+# ---------------------------------------------------------------------
+# Effect size — rank-biserial r
+# ---------------------------------------------------------------------
+# Sprawdzone na skrajnych, ręcznie policzalnych przypadkach (pełna
+# separacja w obie strony, brak tendencji), nie na "typowym" zachowaniu
+# losowego seeda — ta sama zasada projektowa co reszta pliku.
+
+def test_rank_biserial_full_separation_test_higher():
+    # Każda wartość testowa > każda wartość tła -> U = n_test*n_background
+    # (maksymalne) -> r musi wyjść dokładnie +1.
+    result = mann_whitney_test([10, 11, 12], [1, 2, 3])
+    assert result.effect_size_r == pytest.approx(1.0)
+
+
+def test_rank_biserial_full_separation_test_lower():
+    # Odwrotnie: każda wartość testowa < każda wartość tła -> U=0 -> r=-1.
+    result = mann_whitney_test([1, 2, 3], [10, 11, 12])
+    assert result.effect_size_r == pytest.approx(-1.0)
+
+
+def test_rank_biserial_no_tendency_is_near_zero():
+    # Identyczne, w pełni nakładające się rozkłady (te same wartości w
+    # obu grupach, przetasowane) -> brak tendencji w żadną stronę -> r≈0.
+    result = mann_whitney_test([1, 2, 3, 4], [1, 2, 3, 4])
+    assert result.effect_size_r == pytest.approx(0.0, abs=1e-9)
+
+
+def test_rank_biserial_formula_hand_computed():
+    # U=6 (podane wprost), n_test=3, n_background=4:
+    # r = 2*6/(3*4) - 1 = 12/12 - 1 = 0.0
+    assert rank_biserial_effect_size(6, 3, 4) == pytest.approx(0.0)
+    # U=12 (maksymalne dla 3x4), r = 2*12/12 - 1 = 1.0
+    assert rank_biserial_effect_size(12, 3, 4) == pytest.approx(1.0)
+    # U=0, r = -1.0
+    assert rank_biserial_effect_size(0, 3, 4) == pytest.approx(-1.0)
+
+
+def test_rank_biserial_rejects_empty_groups():
+    with pytest.raises(ValueError):
+        rank_biserial_effect_size(1.0, 0, 5)
+
+
+def test_effect_size_label_thresholds():
+    assert effect_size_label(0.05) == "pomijalny"
+    assert effect_size_label(-0.05) == "pomijalny"  # symetryczne w |r|
+    assert effect_size_label(0.2) == "mały"
+    assert effect_size_label(0.4) == "średni"
+    assert effect_size_label(0.9) == "duży"
+
+
+def test_verdict_reports_effect_size_and_power_caveat():
+    significant = TestResult(
+        statistic=100.0, pvalue=0.001, n_test=30, n_background=30,
+        median_test=10.0, median_background=1.0, alternative="two-sided",
+        effect_size_r=0.8,
+    )
+    assert "r=0.8" in significant.verdict()
+    assert "duży" in significant.verdict()
+
+    not_significant = TestResult(
+        statistic=50.0, pvalue=0.9, n_test=30, n_background=30,
+        median_test=5.0, median_background=5.1, alternative="two-sided",
+    )
+    verdict = not_significant.verdict()
+    assert "MOCY TESTU" in verdict
+    assert "NIE jest dowodem braku efektu" in verdict
 
 
 # ---------------------------------------------------------------------
