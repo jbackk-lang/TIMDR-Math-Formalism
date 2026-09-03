@@ -58,6 +58,101 @@ test (Mann-Whitney U), not just a percentile comparison — a percentile
 against one background distribution is weaker evidence than a proper
 two-sample test").
 
+#### 4a. Effect size (`rank_biserial_effect_size`, `TestResult.effect_size_r`)
+
+p-wartość odpowiada na pytanie "czy jest efekt", nie "jak duży jest
+efekt" — dwa wyniki o p=0.001 mogą mieć zupełnie różny rozmiar różnicy
+między grupami. `mann_whitney_test` liczy dodatkowo rank-biserial
+correlation:
+
+```
+r = 2*U/(n_test*n_background) - 1
+```
+
+gdzie `U` to statystyka Manna-Whitneya dla grupy testowej. `r ∈ [-1, 1]`:
+`r>0` — grupa testowa tendencyjnie wyżej niż tło, `r<0` — niżej,
+`|r|=1` — pełna separacja rang (żadnego nakładania), `r=0` — brak
+tendencji w żadną stronę. Progi umowne do etykietowania
+(`effect_size_label`, Cohen-style): `<0.1` pomijalny, `0.1–0.3` mały,
+`0.3–0.5` średni, `≥0.5` duży.
+
+Rozróżnienie "istotny, ale mały" vs "istotny i duży" ma znaczenie
+praktyczne: przy dużym `n` nawet trywialna, nieistotna z punktu widzenia
+zastosowania różnica da p bardzo małe — `r` mówi, czy warto się tym
+przejmować, `p` tylko, czy różnica jest odtwarzalna, a nie przypadkowa.
+
+#### 4b. Moc testu (power) — czego p-wartość NIE mówi
+
+**Wynik nieistotny (p ≥ α) NIE jest automatycznie dowodem braku
+efektu — może być brakiem mocy statystycznej.** Moc testu to
+prawdopodobieństwo wykrycia efektu danej wielkości, GDYBY istniał, przy
+danym `n_test`, `n_background` i teście. Niska moc (za mało obserwacji,
+za mało zmienności/zdarzeń w danych) daje p wysokie niezależnie od tego,
+czy efekt realnie istnieje.
+
+Realny przykład tego dokładnego problemu: walidacja operatora rezonansu
+na prawdziwych danych pogodowych (`docs/REAL_DATA_VALIDATION.md`) dała
+p=1.0 dla obu testowanych progów — ale nie dlatego, że rezonans nie
+przekracza przypadku, tylko dlatego, że w 24-dniowym oknie było zero
+zdarzeń współbieżnych do porównania w OBU grupach (realnej i null).
+Test nie miał żadnej mocy statystycznej w tym oknie — kontrola
+pozytywna (sztucznie wymuszona współbieżność) wykazała, że sama
+metodyka działa (p≈0.0002), więc zerowy wynik główny to ograniczenie
+danych, nie mechaniki testu.
+
+**Jak sprawdzić moc, zamiast zgadywać:**
+
+- **NIE licz "mocy obserwowanej" (post-hoc/retrospective power) z
+  samego wyniku testu.** To zdeterminowana funkcja p-wartości — nie
+  wnosi żadnej nowej informacji i jest odradzane w literaturze
+  statystycznej właśnie dlatego, że tworzy złudzenie niezależnego
+  potwierdzenia tam, gdzie go nie ma.
+- **Licz moc prospektywnie, symulacją, PRZED interpretacją wyniku
+  nieistotnego jako "brak efektu":** wygeneruj wiele syntetycznych
+  powtórzeń ze ZNANYM, założonym efektem (dokładnie to, co robi
+  `positive_injector` w `run_controls`, tylko z realnym `n_test`/
+  `n_background` z Twojego przypadku, nie z domyślnych parametrów
+  kontroli) i sprawdź, jaki odsetek powtórzeń wykrywa efekt (p<α). Niski
+  odsetek = niska moc = wynik nieistotny nie mówi nic pewnego o tym, czy
+  efekt istnieje.
+- Praktyczny sygnał ostrzegawczy bez pełnej symulacji: jeśli jedna z
+  grup ma zerową lub bliską zeru wariancję/liczbę zdarzeń (jak
+  ciśnienie w przykładzie z Krakowa — 0 anomalii na 24 dni), test
+  strukturalnie nie ma jak wykryć różnicy, niezależnie od tego, czy
+  realny efekt istnieje.
+
+### 4c. Okno jako operator (formalizacja)
+
+Krok 2/5 dzieli dane na okna o rozmiarze `window_size` — dotąd tylko
+parametr w kodzie, nie nazwany obiekt matematyczny.
+
+Klasyczny operator przesuwanego okna o promieniu `k` na sygnale
+`x: T → ℝ`:
+
+```
+W_k(x)(t) = (x(t-k), ..., x(t+k))    ∈ ℝ^(2k+1)
+```
+
+Funkcjonał `φ` (mediana, kwantyl `q`) liczony na oknie to złożenie
+`φ ∘ W_k : (T→ℝ) → (T→ℝ)`, `(φ∘W_k)(x)(t) = φ(W_k(x)(t))` — dokładnie
+to, co robi `metric_fn` w `run_controls`/`mann_whitney_test`, tylko
+zapisane jako złożenie dwóch operatorów zamiast pojedynczej funkcji
+Python.
+
+**Ważne zastrzeżenie, żeby `W_k` nie było mylone z tym, co faktycznie
+robi kod:** obecna implementacja (`examples/prime_resonance_demo.py`,
+`dashboard.py::scenario_custom`) dzieli dane na okna **rozłączne**
+(partycja, nie przesuwane/nachodzące) — każdy punkt danych trafia do
+dokładnie jednego okna, nie do `window_size` różnych okien jak przy
+klasycznym sliding window. To świadomy wybór, nie uproszczenie: test
+Manna-Whitneya zakłada niezależne obserwacje w każdej grupie —
+nachodzące na siebie okna dałyby silnie skorelowane próbki (sąsiednie
+okna dzielą większość punktów) i złamałyby to założenie. Formalnie
+używany operator to więc **partycja** `P_k(x) = (W'_1, ..., W'_m)` z
+`W'_i` rozłącznymi blokami rozmiaru `k`, nie `W_k` w klasycznym sensie
+— `W_k` powyżej jest podane jako punkt odniesienia z literatury, nie
+jako opis kodu.
+
 ### 5. Kontrola pozytywna i negatywna (`run_controls`)
 
 Uruchamiane RAZEM, PRZED testem na danych głównych, jako bramka:
