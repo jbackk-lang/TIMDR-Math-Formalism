@@ -18,6 +18,8 @@ from .pipeline import (
     sieve_of_eratosthenes,
     random_background,
     ar1_noise,
+    rank_biserial_effect_size,
+    effect_size_label,
 )
 
 __all__ = [
@@ -32,4 +34,6 @@ __all__ = [
     "sieve_of_eratosthenes",
     "random_background",
     "ar1_noise",
+    "rank_biserial_effect_size",
+    "effect_size_label",
 ]

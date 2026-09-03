@@ -166,8 +166,53 @@ def ar1_noise(
 # Krok 4: Prawdziwy test statystyczny — Mann-Whitney U
 # ---------------------------------------------------------------------
 
+def rank_biserial_effect_size(statistic: float, n_test: int, n_background: int) -> float:
+    """Rank-biserial correlation — rozmiar efektu dla testu Manna-Whitneya,
+    niezależny od p-wartości (p mówi "czy", r mówi "jak dużo").
+
+        r = 2*U/(n_test*n_background) - 1
+
+    gdzie `U` to statystyka U zwrócona przez `scipy.stats.mannwhitneyu`
+    DLA GRUPY TESTOWEJ (pierwszy argument) — czyli liczba par
+    (test_i, background_j) z test_i > background_j (plus 0.5 na
+    remis). Sprawdzone na skrajnych przypadkach: jeśli KAŻDA wartość
+    testowa > KAŻDĄ wartość tła, U=n_test*n_background, więc r=+1;
+    jeśli odwrotnie, U=0, r=-1; jeśli brak tendencji w żadną stronę
+    (tyle samo par "w górę" co "w dół"), U≈n_test*n_background/2, r≈0.
+
+    r>0 → grupa testowa ma tendencyjnie wyższe wartości niż tło.
+    r<0 → niższe. |r|=1 → pełna separacja (żadnego nakładania rang).
+
+    Progi umowne (Cohen-style, tak jak dla zwykłej korelacji):
+    |r|<0.1 pomijalny, 0.1–0.3 mały, 0.3–0.5 średni, ≥0.5 duży —
+    patrz `effect_size_label`.
+    """
+    if n_test <= 0 or n_background <= 0:
+        raise ValueError("n_test i n_background muszą być > 0")
+    return float(2.0 * statistic / (n_test * n_background) - 1.0)
+
+
+def effect_size_label(r: float) -> str:
+    """Klasyfikacja rozmiaru efektu |r| — progi umowne (Cohen-style),
+    NIE substytut patrzenia na samo r; podane tylko jako czytelny skrót
+    w raportach."""
+    ar = abs(r)
+    if ar < 0.1:
+        return "pomijalny"
+    if ar < 0.3:
+        return "mały"
+    if ar < 0.5:
+        return "średni"
+    return "duży"
+
+
 @dataclass
 class TestResult:
+    # Nazwa zaczyna się od "Test" (test statystyczny), nie jest klasą
+    # testów pytest — jawnie wyłącz kolekcjonowanie, żeby nie było
+    # ostrzeżenia PytestCollectionWarning o konstruktorze.
+    __test__ = False
+
     statistic: float
     pvalue: float
     n_test: int
@@ -175,20 +220,43 @@ class TestResult:
     median_test: float
     median_background: float
     alternative: str
+    # Rank-biserial r = 2*U_test/(n_test*n_background) - 1 (patrz
+    # `rank_biserial_effect_size` niżej). r>0: grupa testowa ma
+    # tendencyjnie WYŻSZE wartości niż tło; r<0: niższe; |r|=1: pełna
+    # separacja; r=0: brak tendencji. Domyślne 0.0 dla ręcznie
+    # skonstruowanych TestResult (np. w testach bramki `run_controls`),
+    # które nie liczą tego pola — 0.0 tam NIE oznacza "brak efektu",
+    # tylko "nieustawione", nie interpretuj go w takich przypadkach.
+    effect_size_r: float = 0.0
 
     def verdict(self, alpha: float = 0.05) -> str:
+        label = effect_size_label(self.effect_size_r)
         if self.pvalue < alpha:
             direction = "niższe" if self.median_test < self.median_background else "wyższe"
             return (
                 f"Efekt istotny statystycznie (p={self.pvalue:.4g} < {alpha}): "
                 f"grupa testowa ma {direction} wartości metryki niż tło "
-                f"(mediana {self.median_test:.4g} vs {self.median_background:.4g})."
+                f"(mediana {self.median_test:.4g} vs {self.median_background:.4g}). "
+                f"Rozmiar efektu: r={self.effect_size_r:.3g} ({label}) — "
+                f'"istotny statystycznie" nie znaczy automatycznie "duży", '
+                f"sprawdź r, nie tylko p."
             )
         return (
             f"Brak istotnego efektu (p={self.pvalue:.4g} >= {alpha}) — to jest "
             f'PEŁNA, negatywna odpowiedź, nie "prawie działa". Zgodnie z '
             f"protokołem (krok 6) traktuj to jako dowód przeciwko strukturze, "
-            f"nie jako niedokończony wynik."
+            f"nie jako niedokończony wynik. UWAGA O MOCY TESTU: to jest "
+            f"prawdziwe TYLKO jeśli test miał moc do wykrycia efektu, gdyby "
+            f"istniał — przy n_test={self.n_test}, n_background={self.n_background} "
+            f"i wysokim p sprawdź, czy grupy w ogóle miały zmienność do "
+            f'porównania (np. wariancja > 0, zdarzenia > 0). p≈1 przy zerowej '
+            f'mocy NIE jest dowodem braku efektu, tylko brakiem danych do '
+            f"testu (patrz TIMDR-Math-Formalism/docs/REAL_DATA_VALIDATION.md — "
+            f"realny przykład, gdzie p=1 wyszło z zerowej liczby zdarzeń w "
+            f"24-dniowym oknie, nie z braku struktury). Retrospektywnej "
+            f'"mocy obserwowanej" liczonej z samego p NIE licz — to '
+            f"zdeterminowana funkcja p-wartości, nic nowego nie wnosi; moc "
+            f"licz prospektywnie, symulacją PRZED testem (patrz PROTOCOL.md)."
         )
 
 
@@ -206,14 +274,16 @@ def mann_whitney_test(
     if tv.size == 0 or bv.size == 0:
         raise ValueError("test_values i background_values nie mogą być puste")
     result = stats.mannwhitneyu(tv, bv, alternative=alternative)
+    statistic = float(result.statistic)
     return TestResult(
-        statistic=float(result.statistic),
+        statistic=statistic,
         pvalue=float(result.pvalue),
         n_test=int(tv.size),
         n_background=int(bv.size),
         median_test=float(np.median(tv)),
         median_background=float(np.median(bv)),
         alternative=alternative,
+        effect_size_r=rank_biserial_effect_size(statistic, tv.size, bv.size),
     )
 
 
@@ -360,6 +430,11 @@ def format_report(
         else main_result.pvalue
     )
     lines.append(f"- p (surowe) = {main_result.pvalue:.4g}")
+    lines.append(
+        f"- rozmiar efektu r = {main_result.effect_size_r:.3g} "
+        f"({effect_size_label(main_result.effect_size_r)}) — niezależnie od p, "
+        f"patrz sekcja 'Effect size' w PROTOCOL.md"
+    )
     if n_comparisons > 1:
         lines.append(
             f"- p (po korekcie Bonferroniego za {n_comparisons} "
