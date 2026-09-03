@@ -61,6 +61,33 @@ Eratostenesa):
 python examples/prime_resonance_demo.py
 ```
 
+## 🖥️ Dashboard
+
+GUI (Tkinter) do uruchamiania protokołu bez pisania kodu, dwie zakładki:
+
+- **Gotowe scenariusze** — dwa przetestowane przykłady (liczby pierwsze
+  / regulowane przesunięcie średniej).
+- **Własny scenariusz** — budujesz hipotezę z bezpiecznych klocków:
+  wybierasz dane testowe (liczby pierwsze / losowe całkowite / szum
+  AR(1)), tło reprezentujące hipotezę zerową (losowe całkowite / AR(1)
+  — musi dać się wielokrotnie wylosować), metrykę (średnia / mediana /
+  frakcja spełniająca warunek modulo / frakcja powyżej progu) i siłę
+  efektu do samosprawdzającej kontroli pozytywnej. Zero wykonywania
+  dowolnego kodu — wszystkie pola są opisane po polsku bez żargonu
+  TIMDR, więc nie trzeba znać reszty ekosystemu, żeby wiedzieć, co
+  wpisać.
+
+Klikasz "Uruchom protokół" — widzisz pełny raport (pre-rejestracja,
+kontrola +/-, test Manna-Whitneya, werdykt) i wykres porównujący
+rozkład metryki (test vs tło) na żywo.
+
+```
+python dashboard.py
+```
+
+Na Windows wystarczy dwuklik na `run.bat` — zainstaluje zależności
+(`numpy`, `scipy`, `matplotlib`) i od razu odpali dashboard.
+
 ## 🧩 Moduł — skrót
 
 | Funkcja/klasa | Krok protokołu | Co robi |
@@ -82,7 +109,9 @@ pytest tests/ -v
 Testy używają danych z gwarantowaną separacją (nie losowych progów
 zależnych od konkretnego seeda) albo ręcznie skonstruowanych wyników —
 każda asercja jest zdeterminowana przez konstrukcję testu, nie przez to,
-czy akurat trafił się "dobry" losowy ciąg.
+czy akurat trafił się "dobry" losowy ciąg. `tests/test_dashboard_logic.py`
+sprawdza logikę "Własnego scenariusza" (metryki, źródła danych,
+wstrzykiwanie efektu) bez otwierania okna GUI.
 
 ## ⚠️ Czego ten pipeline NIE robi
 
