@@ -217,8 +217,22 @@ def scenario_prime_resonance(params: dict):
     prereg = Preregistration.create(hypothesis, params)
 
     def positive_injector(window_size, s):
+        # POPRAWKA (samowalidacja): wymuszamy NAPRAWDĘ parzystą sumę
+        # cyfr (a+b+c parzyste), nie tylko parzystą wartość liczby —
+        # te dwie własności są prawie niezależne, patrz
+        # examples/prime_resonance_demo.py::_inject_even_digit_sum.
         rng = np.random.default_rng(s)
-        return rng.integers(1, 500, size=window_size) * 2
+        a = rng.integers(0, 10, size=window_size)
+        b = rng.integers(0, 10, size=window_size)
+        ab_even = (a + b) % 2 == 0
+        even_digits = np.array([0, 2, 4, 6, 8])
+        odd_digits = np.array([1, 3, 5, 7, 9])
+        c = np.where(
+            ab_even,
+            even_digits[rng.integers(0, 5, size=window_size)],
+            odd_digits[rng.integers(0, 5, size=window_size)],
+        )
+        return 100 * a + 10 * b + c
 
     def negative_control(window_size, s):
         rng = np.random.default_rng(s)
