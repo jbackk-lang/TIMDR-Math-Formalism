@@ -102,6 +102,8 @@ Na Windows wystarczy dwuklik na `run.bat` — zainstaluje zależności
 | `run_controls` | 5 | Kontrola pozytywna + negatywna jako bramka przed testem głównym |
 | `bonferroni_correct` | — | Korekta na wielokrotne porównania (look-elsewhere effect) |
 | `format_report` | 6 | Czytelny raport/werdykt, w tym uczciwy wynik negatywny |
+| `chronosignal.tempo`, `chronosignal.drift` | — (instancja sygnału) | Odstępy/drift z sekwencji znaczników czasu — patrz §⏱️ niżej |
+| `chronosignal.anomalia_flags/defekt_flags/skret_flags` | — (detektory) | Definicje §1 skilla, zastosowane do tempa/driftu |
 
 ## 🧪 Testy
 
@@ -116,6 +118,54 @@ każda asercja jest zdeterminowana przez konstrukcję testu, nie przez to,
 czy akurat trafił się "dobry" losowy ciąg. `tests/test_dashboard_logic.py`
 sprawdza logikę "Własnego scenariusza" (metryki, źródła danych,
 wstrzykiwanie efektu) bez otwierania okna GUI.
+
+## ⏱️ Czas jako sygnał — `timdr_formalism.chronosignal`
+
+Instancja generycznego sygnału `x:T→ℝᵈ` gałęzi M/S na konkretny
+przypadek "T = kolejne znaczniki czasu": nie nowa matematyka, tylko
+poprawne wpisanie się w istniejącą definicję sygnału (część
+Chronoprocesu `Ξ=(T,x,Γ,φ)` opisanego w
+`GIA-TIMDR/SKILL_timdr-signal-framework.md`).
+
+Dwie rozdzielone, osobno zdefiniowane serie:
+
+- **`tempo(t)`** = `t[i+1]-t[i]` — sam odstęp, nie wymaga niczego poza
+  znacznikami czasu.
+- **`drift(t)`** = `tempo_zmierzone(t) - tempo_nominalne` — wymaga
+  jawnego zegara referencyjnego (`nominal_interval`); bez niego drift
+  jest formalnie niezdefiniowany.
+
+Plus samodzielna implementacja `anomalia_flags`/`defekt_flags`/
+`skret_flags` (definicje z sekcji 1 skilla `timdr-signal-framework`,
+zastosowane tu konkretnie do tempa/driftu — `rezonans` nie ma sensu na
+pojedynczym sygnale skalarnym, więc nie jest tu zaimplementowany).
+
+```python
+from timdr_formalism.chronosignal import tempo, drift, defekt_flags
+
+ts = [0, 60, 120, 185, 190, 250]        # znaczniki czasu (dowolna jednostka)
+print(tempo(ts))                          # [60, 60, 65, 5, 60]
+print(drift(ts, nominal_interval=60.0))   # [0, 0, 5, -55, 0]
+print(defekt_flags(tempo(ts), factor=0.3))
+```
+
+Pełny, uruchamialny przykład, przepuszczający hipotezę o tempie przez
+cały protokół repo (pre-rejestracja, kontrola +/-, Mann-Whitney,
+werdykt) — analogicznie do `prime_resonance_demo.py`, ale dla tempa
+zamiast liczb pierwszych:
+
+```
+python examples/chronosignal_demo.py
+```
+
+**✅ Zweryfikowane.** `chronosignal.py` i `tests/test_chronosignal.py`
+zostały napisane w sesji bez dostępu do sandboxa bash (matematyka progów
+była ręcznie prześledzona przed uruchomieniem), ale wszystkie 16 testów
+zostało odtąd faktycznie uruchomionych przez użytkownika (`pytest
+tests/test_chronosignal.py -v`) i **przeszło**. `examples/chronosignal_demo.py`
+(interaktywny skrypt, nie plik testowy) nie był jeszcze uruchomiony —
+uruchom go samodzielnie (`python examples/chronosignal_demo.py`), jeśli
+chcesz zobaczyć werdykt na konkretnych liczbach.
 
 ## 🌦️ Walidacja na realnych danych
 
