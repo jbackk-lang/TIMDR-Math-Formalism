@@ -21,6 +21,13 @@ from .pipeline import (
     rank_biserial_effect_size,
     effect_size_label,
 )
+from .chronosignal import (
+    tempo,
+    drift,
+    anomalia_flags,
+    defekt_flags,
+    skret_flags,
+)
 
 __all__ = [
     "Hypothesis",
@@ -36,4 +43,9 @@ __all__ = [
     "ar1_noise",
     "rank_biserial_effect_size",
     "effect_size_label",
+    "tempo",
+    "drift",
+    "anomalia_flags",
+    "defekt_flags",
+    "skret_flags",
 ]
