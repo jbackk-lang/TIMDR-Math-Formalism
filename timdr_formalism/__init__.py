@@ -20,6 +20,7 @@ from .pipeline import (
     ar1_noise,
     rank_biserial_effect_size,
     effect_size_label,
+    calibrate_resonance_threshold,
 )
 from .chronosignal import (
     tempo,
@@ -27,6 +28,15 @@ from .chronosignal import (
     anomalia_flags,
     defekt_flags,
     skret_flags,
+)
+from .calibration import (
+    CalibrationResult,
+    calibrate_resonance_K,
+    theoretical_independence_baseline_rate,
+    compute_anomaly_flags,
+    load_parameter_windows_from_csv,
+    load_krakow_weather_window,
+    P_ANOMALY_2SIGMA_NORMAL,
 )
 
 __all__ = [
@@ -43,9 +53,17 @@ __all__ = [
     "ar1_noise",
     "rank_biserial_effect_size",
     "effect_size_label",
+    "calibrate_resonance_threshold",
     "tempo",
     "drift",
     "anomalia_flags",
     "defekt_flags",
     "skret_flags",
+    "CalibrationResult",
+    "calibrate_resonance_K",
+    "theoretical_independence_baseline_rate",
+    "compute_anomaly_flags",
+    "load_parameter_windows_from_csv",
+    "load_krakow_weather_window",
+    "P_ANOMALY_2SIGMA_NORMAL",
 ]

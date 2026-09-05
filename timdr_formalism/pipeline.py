@@ -453,3 +453,30 @@ def format_report(
         lines.append(f"Po korekcie Bonferroniego: {verdict} (p_corrected={corrected:.4g}).")
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------
+# Rozszerzenie: samokalibracja progu K operatora rezonansu
+# ---------------------------------------------------------------------
+#
+# Cienki wrapper na timdr_formalism.calibration.calibrate_resonance_K,
+# zeby samokalibracja byla wywolywalna jako czesc normalnego przeplywu
+# analizy tego repo (import z timdr_formalism / timdr_formalism.pipeline),
+# a nie tylko z osobnego skryptu
+# (examples/real_weather_resonance_validation.py). Import LOKALNY
+# (wewnatrz funkcji), nie na gorze pliku: calibration.py importuje
+# `bonferroni_correct` STAD (z pipeline.py) do korekty za wielokrotne
+# testowane kandydatow K -- import calibration na gorze tego pliku
+# stworzylby cykl importow.
+
+def calibrate_resonance_threshold(params_flags, K: int, **kwargs):
+    """Samokalibracja progu K operatora rezonansu (R(t) = 1[liczba
+    jednoczesnie anomalnych parametrow >= K]) na realnym oknie
+    wielu-parametrowych flag anomalii -- test permutacyjny (metodyka z
+    examples/real_weather_resonance_validation.py) + kontrola mocy +
+    rekomendacja skalibrowanego K albo jawne "za mala moc, kalibracja
+    nie zastosowana". Patrz timdr_formalism/calibration.py po pelny
+    opis i docs/PROTOCOL.md §4b po uzasadnienie kontroli mocy."""
+    from .calibration import calibrate_resonance_K
+
+    return calibrate_resonance_K(params_flags, K, **kwargs)
