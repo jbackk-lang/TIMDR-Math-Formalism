@@ -126,3 +126,64 @@ w górę.
 - **A lub B nie przechodzą**: uczciwy raport, zero retuningu progów po
   wyniku, zamknięcie tej gałęzi na tym etapie — analogicznie do losu
   mostu Fouriera na realnych danych.
+
+## 8. Wynik oficjalnego testu (2026-09-15, PO zamrożeniu powyższego)
+
+Uruchomiono dokładnie wg specyfikacji: 4 reżimy × 5 poziomów szumu ×
+30 powtórzeń (V0 losowane NIEZALEŻNIE każdorazowo z `Uniform(0.5,1.5)`,
+NIE stałe jak we wstępnej eksploracji sekcji 7 draftu — to jest ważna
+różnica, patrz niżej), 4-punktowa wielostartowość bez zmian.
+
+**Kryterium A (dokładność, `ω₀=3.0`) — NIE PRZECHODZI.** Błąd `Re(λ)`
+rośnie szybko wraz z szumem i przekracza próg 25% już przy najmniejszym
+nieszumowym poziomie testowanym: `noise=0.02`→30.2%, `noise=0.05`→66.6%,
+`noise=0.10`→**99.6%** (błąd rzędu samej wartości). `Im(λ)` natomiast
+zachowuje się dobrze przez cały zakres: `noise=0.02`→1.8%,
+`noise=0.05`→4.1%, `noise=0.10`→8.4% — WSZYSTKIE poniżej progu 25%.
+**To jest asymetryczny wynik: `Im(λ)` (częstość rotacji) jest solidnie
+odzyskiwane, `Re(λ)` (tempo obwiedni) NIE jest.**
+
+**Kryterium B (klasyfikacja obecności rotacji) — PRZECHODZI.** Czułość
+(`ω₀=3.0`, `Im_fit>0.3`): `100%, 96.7%, 93.3%` dla `noise=0.02/0.05/0.10`
+— powyżej progu 80% na całym zakresie. Swoistość (`ω₀=0.0` i `ω₀=0.5`,
+`Im_fit<=0.3`): `100%/90%/96.7%` (`ω₀=0.0`) i `100%/100%/100%`
+(`ω₀=0.5`) dla `noise=0.02/0.05/0.10` — również powyżej 80% wszędzie.
+Binarny detektor "czy jest genuine rotacja" jest solidny w całym
+testowanym zakresie szumu, mimo że dokładna wartość `Re(λ)` nie jest.
+
+**Ogólny wynik: CZĘŚCIOWY SUKCES (tylko B), zgodnie z regułą z sekcji 5
+— nie zaokrąglone w górę do "sukces".** Zero progów zmienionych po
+zobaczeniu wyniku.
+
+**Dlaczego wynik jest gorszy niż wstępna eksploracja sekcji 7 draftu**:
+tamten test używał JEDNEGO, STAŁEGO warunku początkowego (`V0=(1.0,0.3)`)
+i tylko 6-10 powtórzeń. Ten test losuje `V0` niezależnie na każde
+powtórzenie i używa 30 powtórzeń — bardziej reprezentatywny, i wychodzi
+na jaw, że wcześniejszy dobry wynik dla `Re(λ)` był częściowo artefaktem
+jednego, wygodnego `V0`, nie ogólną własnością metody. Dokładnie to, po
+co jest formalna pre-rejestracja z większą próbą — złapać to, zanim
+trafi do realnych danych.
+
+**Odnotowany artefakt numeryczny (nie błąd wyniku)**: dla `ω₀=1.5`
+(dokładnie na progu) `Im(λ)_true` z `np.linalg.eigvals` wychodzi jako
+`~1.3e-8` zamiast dokładnego zera (szum zmiennoprzecinkowy przy
+podwójnym pierwiastku), co przy liczeniu błędu względnego
+(`|Im_fit-Im_true|/|Im_true|`) daje pozornie duże/dziwne liczby przy
+dzieleniu przez niemal-zero. Sekcja 5 (kryterium C) z góry wyłączała
+`ω₀=1.5` z oceny sukcesu/porażki dokładnie z tego powodu — artefakt nie
+wpływa na werdykt A/B powyżej.
+
+## 9. Wniosek i zawężenie zakresu (wzorem mostu Fouriera)
+
+Ten estymator NIE nadaje się do ilościowego pomiaru `Re(λ)` na realnych
+danych — błąd rzędu dziesiątek-do-100%+ nawet przy umiarkowanym szumie.
+NADAJE SIĘ natomiast jako binarny detektor "czy w tym oknie jest
+w ogóle genuine rotacja (`Im(λ)≠0`), czy nie" — to zweryfikowane
+solidnie w całym testowanym zakresie szumu.
+
+Jeśli ma być kontynuowany krok "realne dane", to WYŁĄCZNIE w tym
+zawężonym zakresie: pytanie "ile realnych okien M/S klasyfikuje się
+jako 'ma rotację' vs 'nie ma'", NIE "jaka jest wartość `Re(λ)`/`Im(λ)`
+tych okien". To jest analogiczne zawężenie do tego, jakie spotkało most
+Fouriera (`RESULT_FOURIER_BRIDGE_SCOPE.md`) — konstrukcja przeżywa, ale
+w węższym, uczciwie odnotowanym zakresie niż pierwotnie zakładano.
