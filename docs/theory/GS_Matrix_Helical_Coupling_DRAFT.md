@@ -1,5 +1,15 @@
 # DRAFT: sprzężenie helikalne K ↔ Θ_bif
 
+> **Zamknięte na tym etapie (2026-09-15), uczciwie niedomknięte:**
+> konstrukcja matematyczna (sekcje 1-4) jest wewnętrznie spójna i
+> zweryfikowana numerycznie — pomysł sam w sobie jest sensowny. Droga
+> do sprawdzenia go na realnych danych jest zablokowana: jedyny
+> zbudowany estymator `Re(λ)/Im(λ)` (sekcja 6) zawodzi katastroficznie
+> przy realistycznym poziomie szumu, z rozpoznaną przyczyną
+> strukturalną (nie tylko brakiem dostrojenia). Nie promowane do
+> "modułu", nie testowane na realnych danych, nie kontynuowane bez
+> osobnej decyzji o dalszej pracy nad estymatorem.
+
 > **Status: NOWA KONSTRUKCJA, nie wyprowadzenie z istniejącego,
 > połączonego formalizmu.** `gs_matrix.py` (macierz `K`, układ
 > `dV/dt=KV`) i `theta_bifurcation.py` (`S_down`, `S_up`, `λ_down`,
