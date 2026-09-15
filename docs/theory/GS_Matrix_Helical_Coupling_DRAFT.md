@@ -1,14 +1,15 @@
 # DRAFT: sprzężenie helikalne K ↔ Θ_bif
 
-> **Zamknięte na tym etapie (2026-09-15), uczciwie niedomknięte:**
-> konstrukcja matematyczna (sekcje 1-4) jest wewnętrznie spójna i
-> zweryfikowana numerycznie — pomysł sam w sobie jest sensowny. Droga
-> do sprawdzenia go na realnych danych jest zablokowana: jedyny
-> zbudowany estymator `Re(λ)/Im(λ)` (sekcja 6) zawodzi katastroficznie
-> przy realistycznym poziomie szumu, z rozpoznaną przyczyną
-> strukturalną (nie tylko brakiem dostrojenia). Nie promowane do
-> "modułu", nie testowane na realnych danych, nie kontynuowane bez
-> osobnej decyzji o dalszej pracy nad estymatorem.
+> **Odblokowane częściowo (2026-09-15, ten sam dzień):** bloker z
+> sekcji 6 (naiwny estymator DMD/różnicowy) dotyczył KONKRETNEJ metody,
+> nie samej możliwości estymacji. Sekcja 7 pokazuje, że dopasowanie
+> ZNANEGO KSZTAŁTU rozwiązania (nieliniowe najmniejsze kwadraty
+> względem całego okna, nie różnicowanie próbka-po-próbce) jest
+> drastycznie odporniejsze na szum — zweryfikowane numerycznie. Nadal
+> pozostaje umiarkowana wrażliwość na szum (błędy rzędu kilkunastu-
+> kilkudziesięciu %, nie ułamków %) i wymóg wielostartowej optymalizacji
+> (minima lokalne) — nie "rozwiązane do zera", ale nie jest już
+> blokerem uniemożliwiającym dalszą pracę.
 
 > **Status: NOWA KONSTRUKCJA, nie wyprowadzenie z istniejącego,
 > połączonego formalizmu.** `gs_matrix.py` (macierz `K`, układ
@@ -233,3 +234,58 @@ czasowo-różniczkowych, filtracja przed zanurzeniem, dłuższe uśrednianie)
 `Re(λ)`/`Im(λ)` z realnych danych ma sens, ten estymator musi najpierw
 przejść WŁASNĄ kontrolę pozytywną przy realistycznym poziomie szumu —
 czego obecna wersja NIE przechodzi.
+
+## 7. Poprawka (podsunięta wprost): estymator przez dopasowanie kształtu, nie różnicowanie
+
+Uwaga, która odblokowała sekcję 6: DMD/estymator różnicowy z sekcji 6
+używa TYLKO lokalnej informacji (kolejne próbki, przez różnicę/logarytm
+propagatora) — dokładnie to wzmacnia szum. Jeśli ZAKŁADAMY znany
+kształt rozwiązania (rodzina `x(t)=[exp(Kt)·V0]₀` z sekcji 1, 5 wolnych
+parametrów: `μ_down, μ_up, ω₀, v1, v2`), można zamiast różnicowania
+dopasować ten kształt do CAŁEGO okna naraz metodą nieliniowych
+najmniejszych kwadratów (`scipy.optimize.least_squares`) — używa się
+wtedy globalnej struktury okna ("warunków brzegowych" całego przebiegu),
+nie lokalnych różnic.
+
+**Zweryfikowane numerycznie**, ten sam syntetyczny test co w sekcji 6
+(`N=64`, `λ_down=2.0, λ_up=1.0`), z NIEINFORMOWANYM punktem startowym
+optymalizacji (siatka 3 zgadywanych `ω₀∈{0.1,2.0,5.0}`, NIE skalowana
+znaną prawdą — uczciwy test):
+
+| reżim | szum | Re(λ) prawdziwe → fit | Im(λ) prawdziwe → fit |
+|---|---|---|---|
+| spiralny (`ω₀=3.0`) | 0.10 | −0.500 → −0.590 (~18%) | 2.598 → 2.263 (~13%) |
+| rzeczywisty (`ω₀=0.5`) | 0.10 | −1.914 → −1.600 (~16%) | 0.000 → 0.000 (dokładnie) |
+| brak rotacji (`ω₀=0.0`) | 0.10 | −2.000 → −2.135 (~7%) | 0.000 → 0.000 (dokładnie) |
+
+Dla porównania sekcja 6 przy TYM SAMYM poziomie szumu dawała błędy
+rzędu **700-3000%** i fałszywe artefakty aliasingu w `Im(λ)`. Tu: błędy
+rzędu kilkunastu procent, `Im(λ)` NIGDY nie daje fałszywej rotacji dla
+reżimów bez rotacji (zero artefaktów aliasingu — bo nie różnicujemy).
+
+**Uczciwe zastrzeżenia (to NIE jest "rozwiązane do zera")**:
+- Przy pojedynczym, nieinformowanym starcie optymalizacja czasem wpada
+  w minimum lokalne (obserwowane: jeden przypadek `ω₀=0.5, szum=0.05`
+  dał błąd Re(λ) ~76% zamiast oczekiwanych kilkunastu % — poprawiło się
+  przy większej liczbie startów, ale to pokazuje, że NIE jest to
+  niezawodne bez wielostartowości).
+- Wymaga ZAŁOŻENIA, że okno faktycznie ma kształt tej konkretnej
+  rodziny (rozwiązanie liniowego `dV/dt=KV`) — jeśli realne dane mają
+  inny kształt (co dokładnie pokazało `RESULT_FOURIER_BRIDGE_SCOPE.md`
+  dla impulsu gaussowskiego: realne zdarzenia M/S często NIE pasują do
+  założonego kształtu), dopasowanie da liczby, ale nie będzie wiadomo,
+  czy są sensowne, bez osobnego testu jakości dopasowania (np. reszty
+  residualne vs poziom szumu tła) — nie zrobione tu.
+- Błędy kilkunastu-kilkudziesięciu % to wciąż dużo więcej niż
+  dyskretyzacyjna tolerancja mostu Fouriera (`±30%` maksymalnie, tu
+  podobnego rzędu ALE przy DUŻO niższym poziomie szumu niż realne dane
+  zwykle mają) — nie zakładać z góry, że to wystarczy na realnych
+  danych bez sprawdzenia.
+
+**Odczyt**: bloker NIE jest już bezwzględny — jest to teraz "zwykły"
+problem dokładności estymatora (kilkanaście-kilkadziesiąt % błędu przy
+umiarkowanym szumie), a nie strukturalna niemożliwość. Wystarczające,
+żeby rozważyć przejście do właściwej pre-rejestracji na tej metodzie —
+ale z jawnie odnotowaną, niższą precyzją niż most Fouriera i wymogiem
+sprawdzenia jakości dopasowania na realnych oknach, nie tylko na
+syntetycznych.
