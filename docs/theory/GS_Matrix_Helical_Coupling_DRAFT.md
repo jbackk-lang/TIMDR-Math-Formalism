@@ -171,3 +171,55 @@ policzalne z tych samych trzech parametrów `λ_down, λ_up, ω₀`).
 Do tego momentu: to jest matematyka nowej, jawnie oznaczonej konstrukcji
 — zweryfikowana wewnętrznie (algebra + numeryka się zgadzają), ale bez
 JAKIEJKOLWIEK empirycznej treści.
+
+## 6. Kontrola pozytywna estymatora Re(λ)/Im(λ) — ZNALEZIONY BLOKER (przed dotknięciem realnych danych)
+
+Punkt otwarty 1 z sekcji 5 (jak niezależnie szacować `Re(λ)`, `Im(λ)` z
+pojedynczego, skalarnego `x(t)`) przetestowany metodą standardową
+(DMD-styl: zanurzenie opóźniające `V[i]=[x[i],x[i+τ]]`, dopasowanie
+najmniejszych kwadratów jednokrokowego propagatora `A` (`V[i+1]≈A·V[i]`),
+`K=log(A)/dt_eff`) — PRZED jakimkolwiek dotknięciem realnych danych, na
+syntetycznym sygnale z ZNANYM `K` (dokładnie ten sam wzorzec kontroli
+pozytywnej co w `PREREG_MS_K_EVENTS.md`).
+
+**Bez szumu**: metoda jest dokładna — odtwarza `Re(λ)`, `Im(λ)` co do 4
+miejsc po przecinku, dla obu reżimów (spiralnego `ω₀=3.0` i
+rzeczywistego `ω₀=0.5`).
+
+**Z szumem — całkowita awaria, nawet przy bardzo małym poziomie**: przy
+`noise_sigma=0.01` (1% amplitudy sygnału ~1.0) na oknie `N=64` próbek
+(ten sam rozmiar okna co w `PREREG_MS_K_EVENTS.md`, licząc OD początku
+epizodu bifurkacji):
+
+| reżim | Re(λ) prawdziwe | Re(λ) fit (szum 0.01) | Im(λ) prawdziwe | Im(λ) fit (szum 0.01) |
+|---|---|---|---|---|
+| spiralny (`ω₀=3.0`) | −0.500 | −0.590 (τ=8, ~18% błędu — brzeg akceptowalności) | 2.598 | 2.712 |
+| rzeczywisty (`ω₀=0.5`) | −1.914 | −13.07 (τ=8, ~7× za duże) | 0.000 | 39.27 (**artefakt**, `=5π/dt_eff`) |
+| brak rotacji (`ω₀=0.0`) | −2.000 | −9.34 (τ=8) | 0.000 | 39.27 (**artefakt**) |
+
+Przy `noise_sigma=0.05` (5%) nawet reżim spiralny łamie się (`Re(λ)`
+błędne o czynnik ~6×).
+
+**Diagnoza (nie tylko obserwacja awarii — zrozumiany mechanizm)**: dla
+reżimu z DWOMA różnymi wartościami rzeczywistymi (`ω₀≤ω₀_crit`),
+trajektoria `[x(t),x(t+τ)]` asymptotycznie kolabuje na JEDNĄ linię
+(dominujący mod `e^{μ_max·t}` przytłacza drugi), więc `X0` w regresji
+najmniejszych kwadratów jest niemal osobliwe niezależnie od szumu —
+widoczne wprost we wskaźniku uwarunkowania (`cond(X0)~1e14-1e17` nawet
+przy ZEROWYM szumie dla `ω₀=0.0`). To NIE jest błąd implementacji — to
+strukturalna nieidentyfikowalność: pojedyncza skalarna obserwacja
+sumy dwóch realnych modów o różnym tempie nie niesie dość informacji,
+żeby odtworzyć OBA tempa, gdy jeden już zdominował.
+
+**Wniosek — bloker, nie szczegół do poprawki w locie**: naiwny
+DMD/estymator zanurzeniowy NIE nadaje się do użycia na jakichkolwiek
+realnych danych M/S (szum rzędu kilku-kilkunastu % jest tam normą, nie
+wyjątkiem — patrz np. `noise_sigma` w kontrolach pozytywnych
+`PREREG_MS_K_EVENTS.md`, `0.05`). To jest osobny, nietrywialny problem
+identyfikacji systemu (potencjalne kierunki: regresja całkowitych
+najmniejszych kwadratów zamiast OLS, metody widmowe zamiast
+czasowo-różniczkowych, filtracja przed zanurzeniem, dłuższe uśrednianie)
+— NIEZWERYFIKOWANY, niezrobiony tutaj. Zanim jakikolwiek pomiar
+`Re(λ)`/`Im(λ)` z realnych danych ma sens, ten estymator musi najpierw
+przejść WŁASNĄ kontrolę pozytywną przy realistycznym poziomie szumu —
+czego obecna wersja NIE przechodzi.
