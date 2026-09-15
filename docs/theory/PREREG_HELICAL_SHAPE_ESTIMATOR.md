@@ -187,3 +187,55 @@ jako 'ma rotację' vs 'nie ma'", NIE "jaka jest wartość `Re(λ)`/`Im(λ)`
 tych okien". To jest analogiczne zawężenie do tego, jakie spotkało most
 Fouriera (`RESULT_FOURIER_BRIDGE_SCOPE.md`) — konstrukcja przeżywa, ale
 w węższym, uczciwie odnotowanym zakresie niż pierwotnie zakładano.
+
+## 10. Zastosowanie do realnych danych (binarny detektor, zgodnie z zawężeniem)
+
+Te same okna zdarzeń co `PREREG_MS_K_EVENTS.md` (sekcje 9 i 11 —
+sejsmika Ridgecrest 2019, łożyska CWRU, BTC/USD godzinowy), dla
+porównywalności. Klasyfikacja wg zamrożonego progu `Im(λ)_fit>0.3`
+(sekcja 4-5 powyżej), procedura dopasowania BEZ ZMIAN.
+
+**Znaleziona i naprawiona usterka implementacyjna (przy pierwszym
+uruchomieniu na realnych danych, PRZED zapisaniem wyniku końcowego)**:
+pierwsza próba dała przepełnienia (`RuntimeWarning: overflow in exp`) —
+optymalizator (`method='lm'`, bez granic) w trakcie poszukiwań
+odwiedzał wartości `μ·t` na tyle duże (t do 63), że `exp()` przepełniał
+zakres `double`. Dodano: (a) granice parametrów
+(`|μ|,ω₀<=10`, dobrane tak, żeby `exp(10·63)` nie przepełniało),
+`method='trf'` (obsługuje granice, `'lm'` nie); (b) normalizację
+amplitudy okna (`(x-mean)/std`) PRZED dopasowaniem — nieobecną w
+oryginalnej pre-rejestracji, bo syntetyczny test miał już amplitudę
+rzędu `O(1)`, a sejsmika ma amplitudy rzędu `O(1e4)`. **To jest
+udokumentowana poprawka numeryczna, zastosowana JEDNOLICIE do
+wszystkich domen przed policzeniem końcowych liczb — nie dobrana pod
+konkretny wynik którejkolwiek domeny.** Wynik NAIWNY (przed poprawką,
+zanieczyszczony przepełnieniami) i POPRAWIONY różnią się istotnie
+(np. sejsmika CLC: 45.5%→0.0%) — POPRAWIONY jest tym, który się liczy;
+naiwny odnotowany tu wyłącznie dla przejrzystości procesu.
+
+**Wynik (wersja poprawiona, N_fit_ok=N_okien wszędzie — zero
+nieudanych dopasowań)**:
+
+| domena | N okien | N z rotacją | % z rotacją |
+|---|---|---|---|
+| sejsmika CLC | 11 | 0 | 0.0% |
+| sejsmika RIO | 27 | 2 | 7.4% |
+| łożyska normal | 4 | 2 | 50.0% |
+| łożyska ball_fault | 4 | 4 | 100.0% |
+| łożyska outer_race | 1 | 1 | 100.0% |
+| łożyska inner_race | 0 | — | brak okien (jak w PREREG_MS_K_EVENTS) |
+| BTC/USD godzinowy | 0 | — | brak okien (jak w PREREG_MS_K_EVENTS) |
+
+**Odczyt, ostrożnie**: sejsmika niemal nigdy nie klasyfikuje się jako
+"ma genuine rotację" (0-7%), łożyska niemal zawsze (50-100%) — kierunek
+fizycznie sensowny (wibracje łożysk są z natury wielocyklowe/
+oscylacyjne w oknie 64 próbek, sejsmiczne wstąpienie fazy P jest
+bardziej impulsywne, mniej oscylacyjne w tej samej skali okna — zgodne
+z ustaleniem z `RESULT_FOURIER_BRIDGE_SCOPE.md`). **To jest opisowa
+obserwacja na małej próbie (N=1-27 na domenę), NIE test istotności
+statystycznej** — brak porównania z tłem/oknami losowymi, brak
+Manna-Whitneya, brak korekty Bonferroniego — żaden z wymogów protokołu
+anty-numerologicznego (`SKILL_timdr-signal-framework.md` §2) nie został
+tu zastosowany. Jeśli ten wynik ma być podstawą jakiegokolwiek
+twierdzenia silniejszego niż "opisowo widać taki wzorzec", potrzebny
+osobny, pełny test z kontrolami — nie zrobiony tutaj.
