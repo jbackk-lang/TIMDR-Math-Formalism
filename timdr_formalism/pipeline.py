@@ -308,7 +308,27 @@ class TestResult:
     # tylko "nieustawione", nie interpretuj go w takich przypadkach.
     effect_size_r: float = 0.0
 
+    # Pola specyficzne dla testów SPAROWANYCH (`paired_wilcoxon_test`) —
+    # None/0/False/"" (wartości domyślne) dla wyników `mann_whitney_test`,
+    # bo test dwóch NIEZALEŻNYCH grup nie ma pojęcia "par" ani remisów
+    # par. `n_test`/`n_background` dla wyniku sparowanego są sobie równe
+    # (ta sama liczba par po stronie testowej i tła) i oznaczają liczbę
+    # WALIDNYCH par (po odrzuceniu NaN), NIE liczbę par niezerowych
+    # użytą faktycznie w statystyce — to jest `n_nonzero`.
+    n_nonzero: Optional[int] = None
+    n_nan_dropped: int = 0
+    inconclusive: bool = False
+    reason: str = ""
+
     def verdict(self, alpha: float = 0.05) -> str:
+        if self.inconclusive:
+            return (
+                f"WYNIK NIEROZSTRZYGNIĘTY (inconclusive): "
+                f"{self.reason or 'za mało danych do wiarygodnej aproksymacji'} — "
+                "to NIE jest 'brak efektu', to brak podstaw do jakiegokolwiek "
+                "werdyktu w żadną stronę. Nie interpretuj pvalue/effect_size_r "
+                "z tego wyniku (są `nan` celowo)."
+            )
         label = effect_size_label(self.effect_size_r)
         if self.pvalue < alpha:
             direction = "niższe" if self.median_test < self.median_background else "wyższe"
@@ -397,6 +417,209 @@ def mann_whitney_test(
         median_background=float(np.median(bv)),
         alternative=alternative,
         effect_size_r=rank_biserial_effect_size(statistic, tv.size, bv.size),
+    )
+
+
+# ---------------------------------------------------------------------
+# Krok 4 (wariant SPAROWANY): Wilcoxon signed-rank test
+# ---------------------------------------------------------------------
+#
+# UWAGA KRYTYCZNA O ZNAKU `scipy.stats.wilcoxon` (odkryte 2026-09-22,
+# podczas testowania mostu "membrana" na realnych danych PROTECT-90 —
+# patrz `TIMDR-Grid-Monitor/docs/RESULT_PROTECT90_MEMBRANE_v0.1.md` §2.1
+# oraz `TIMDR-Grid-Monitor/docs/PREREG_PROTECT90_MEMBRANE_v0.1.md`):
+#
+#     scipy.stats.wilcoxon(..., alternative="two-sided", method="approx")
+#
+# zwraca `zstatistic` PRZEPUSZCZONY przez `z = -abs(z)` w kodzie
+# źródłowym scipy (`scipy/stats/_wilcoxon.py` — linia opatrzona w
+# źródle scipy komentarzem "for backward compatibility"; to jest
+# ŚWIADOMA decyzja API scipy, nie przypadkowy bug w scipy). Dla testu
+# DWUSTRONNEGO oznacza to, że `zstatistic` jest WIĘC ZAWSZE UJEMNY,
+# niezależnie od faktycznego kierunku efektu (czy test > tło, czy
+# odwrotnie) — scipy w ogóle nie sygnalizuje tego w żaden sposób (brak
+# ostrzeżenia, brak wyjątku).
+#
+# Ktokolwiek zaufa znakowi `zstatistic` ze scipy WPROST jako "kierunkowi
+# efektu" dostanie CICHO fałszywie odwrócony kierunek w KAŻDYM
+# sparowanym teście dwustronnym w tym ekosystemie. To jest dokładnie ten
+# błąd, który został znaleziony i naprawiony podczas analizy PROTECT-90.
+#
+# DLATEGO: NIE "napraw" tego z powrotem do gołego
+# `scipy.stats.wilcoxon(...).zstatistic` bez przeczytania tej uwagi w
+# całości — to była celowa naprawa realnego, cichego błędu kierunku, nie
+# nadgorliwość. Znak/wartość `z` liczy WŁASNA implementacja
+# (`_wilcoxon_signed_rank_z_p_numpy`, z sumy rang `r_plus` PRZED
+# zawinięciem do wartości bezwzględnej — zweryfikowana empirycznie: dla
+# syntetycznego `test = background + 2.0` daje `z > 0`, zgodnie z
+# oczekiwanym kierunkiem, oraz `|z|` zgodne co do kilku miejsc po
+# przecinku z tym, co zwraca scipy). scipy (jeśli dostępne) jest używany
+# WYŁĄCZNIE jako niezależny cross-check p-wartości (musi się zgadzać co
+# do ~6 miejsc po przecinku, inaczej `RuntimeError` — nigdy jako źródło
+# znaku ani jedyne źródło p-wartości).
+
+
+def _wilcoxon_signed_rank_z_p_numpy(d_nonzero: np.ndarray) -> tuple[float, float]:
+    """Dwustronny test Wilcoxona ze znakiem rang, czysty numpy/stdlib
+    (bez scipy) — analogiczny wzorzec co `_mannwhitney_u_p_numpy` wyżej,
+    port sprawdzonej implementacji z
+    `TIMDR-Grid-Monitor/real_protect90_membrane_bridge.py::_wilcoxon_numpy`
+    (tam zweryfikowana empirycznie na realnych danych PROTECT-90 — patrz
+    uwaga nad tą sekcją). Aproksymacja normalna z korektą na remisy w
+    rangach, bez korekty ciągłości — zgodne co do kilku miejsc po
+    przecinku ze `scipy.stats.wilcoxon(method="approx", correction=False)`
+    co do WARTOŚCI BEZWZGLĘDNEJ i p-wartości, ale ze znakiem `z`, który
+    faktycznie odzwierciedla kierunek efektu (scipy zwraca `z=-abs(z)`
+    dla two-sided — patrz uwaga wyżej, to różnica CELOWA, nie
+    niezgodność do naprawienia).
+
+    `d_nonzero`: różnice (test − background) PO usunięciu par o różnicy
+    dokładnie zero (konwencja `zero_method="wilcox"`) — wywołujący
+    filtruje remisy PRZED wywołaniem tej funkcji.
+
+    Zwraca (z, p-wartość dwustronna).
+    """
+    n = len(d_nonzero)
+    if n == 0:
+        return float("nan"), 1.0
+    abs_d = np.abs(d_nonzero)
+    order = np.argsort(abs_d, kind="mergesort")
+    sorted_vals = abs_d[order]
+    ranks = np.empty(n, dtype=float)
+    i = 0
+    rank_cursor = 1
+    tie_term = 0.0
+    while i < n:
+        j = i
+        while j + 1 < n and sorted_vals[j + 1] == sorted_vals[i]:
+            j += 1
+        t = j - i + 1
+        avg_rank = (rank_cursor + rank_cursor + (t - 1)) / 2.0
+        ranks[order[i:j + 1]] = avg_rank
+        tie_term += t ** 3 - t
+        rank_cursor += t
+        i = j + 1
+
+    r_plus = float(ranks[d_nonzero > 0].sum())
+    mu = n * (n + 1) / 4.0
+    sigma2 = n * (n + 1) * (2 * n + 1) / 24.0 - tie_term / 48.0
+    sigma = math.sqrt(sigma2) if sigma2 > 0 else 0.0
+    if sigma == 0:
+        return 0.0, 1.0
+    z = (r_plus - mu) / sigma
+    p = math.erfc(abs(z) / math.sqrt(2.0))
+    return z, min(1.0, p)
+
+
+def paired_wilcoxon_test(
+    test_values: Sequence[float],
+    background_values: Sequence[float],
+    alternative: str = "two-sided",
+    min_nonzero: int = 10,
+) -> TestResult:
+    """Krok 4 (wariant SPAROWANY): test Wilcoxona ze znakiem rang,
+    sparowany PO INDEKSIE (`test_values[i]` i `background_values[i]` to
+    ten sam obiekt/epizod — np. baseline vs event NA TYM SAMYM
+    epizodzie) — odpowiednik `mann_whitney_test` dla sytuacji, gdzie
+    grupy NIE są niezależne (w odróżnieniu od `mann_whitney_test`, gdzie
+    `test_values`/`background_values` to dwa niezależne zbiory, np.
+    plików normal/fault w domenie łożyskowej).
+
+    Znak/wartość statystyki `z` liczona jest WŁASNĄ implementacją
+    (`_wilcoxon_signed_rank_z_p_numpy`), NIE ze `zstatistic` scipy wprost
+    — patrz obszerna uwaga nad tą sekcją o `z=-abs(z)` w scipy dla testu
+    two-sided. scipy (jeśli dostępne) używany jest WYŁĄCZNIE jako
+    cross-check p-wartości, z twardym `RuntimeError` przy rozbieżności
+    > ~1e-6 — nigdy jako źródło znaku.
+
+    Pary z NaN po którejkolwiek stronie są odrzucane (`n_nan_dropped`).
+    Pary z różnicą dokładnie zero (remisy test==background) są
+    odrzucane zgodnie z konwencją `zero_method="wilcox"` scipy — liczba
+    pozostałych par to `n_nonzero`, użyta jako dzielnik w rozmiarze
+    efektu `r = z / sqrt(n_nonzero)` (rank-biserial dla par, analogicznie
+    do `rank_biserial_effect_size` dla Manna-Whitneya). Jeśli po tym
+    filtrowaniu zostanie mniej niż `min_nonzero` par (domyślnie 10 —
+    próg zachowany z oryginalnej implementacji PROTECT-90, zbyt mała
+    próba dla wiarygodnej aproksymacji normalnej), zwracany jest
+    `TestResult` z `inconclusive=True`, `pvalue=nan`, `statistic=nan` —
+    NIE fałszywy/zdegenerowany wynik liczbowy.
+
+    `alternative`: obecnie wspierane WYŁĄCZNIE "two-sided" (tak jak
+    fallback numpy `mann_whitney_test(backend="numpy")`) — warianty
+    jednostronne nie są (jeszcze) zaimplementowane tutaj.
+    """
+    if alternative != "two-sided":
+        raise ValueError(
+            "paired_wilcoxon_test wspiera obecnie wyłącznie "
+            "alternative='two-sided'"
+        )
+
+    tv = np.asarray(test_values, dtype=float)
+    bv = np.asarray(background_values, dtype=float)
+    if tv.shape != bv.shape:
+        raise ValueError(
+            "test_values i background_values muszą mieć ten sam kształt "
+            f"(sparowanie po indeksie) — dostano {tv.shape} vs {bv.shape}"
+        )
+    if tv.size == 0:
+        raise ValueError("test_values i background_values nie mogą być puste")
+
+    valid = ~(np.isnan(tv) | np.isnan(bv))
+    test_v = tv[valid]
+    background_v = bv[valid]
+    n_pairs = int(valid.sum())
+    n_nan_dropped = int((~valid).sum())
+
+    diff = test_v - background_v
+    nz_mask = diff != 0
+    n_nonzero = int(nz_mask.sum())
+
+    if n_nonzero < min_nonzero:
+        return TestResult(
+            statistic=float("nan"),
+            pvalue=float("nan"),
+            n_test=n_pairs,
+            n_background=n_pairs,
+            median_test=float(np.median(test_v)) if n_pairs else float("nan"),
+            median_background=float(np.median(background_v)) if n_pairs else float("nan"),
+            alternative=alternative,
+            effect_size_r=float("nan"),
+            n_nonzero=n_nonzero,
+            n_nan_dropped=n_nan_dropped,
+            inconclusive=True,
+            reason=f"za mało niezerowych par ({n_nonzero} < {min_nonzero})",
+        )
+
+    z, p = _wilcoxon_signed_rank_z_p_numpy(diff[nz_mask])
+    if _HAS_SCIPY:
+        res = _scipy_stats.wilcoxon(
+            test_v[nz_mask], background_v[nz_mask],
+            alternative="two-sided", method="approx", zero_method="wilcox",
+            correction=False,
+        )
+        p_scipy = float(res.pvalue)
+        if not math.isclose(p, p_scipy, rel_tol=1e-6, abs_tol=1e-12):
+            raise RuntimeError(
+                f"Rozbieżność między własną implementacją Wilcoxona (p={p!r}) "
+                f"a scipy (p={p_scipy!r}) — cross-check się nie zgadza, nie "
+                "ufaj wynikowi."
+            )
+
+    r = z / math.sqrt(n_nonzero)
+
+    return TestResult(
+        statistic=z,
+        pvalue=p,
+        n_test=n_pairs,
+        n_background=n_pairs,
+        median_test=float(np.median(test_v)),
+        median_background=float(np.median(background_v)),
+        alternative=alternative,
+        effect_size_r=r,
+        n_nonzero=n_nonzero,
+        n_nan_dropped=n_nan_dropped,
+        inconclusive=False,
+        reason="",
     )
 
 
